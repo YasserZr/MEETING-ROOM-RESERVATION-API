@@ -1,24 +1,22 @@
+# app/__init__.py
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager
-from flask_cors import CORS
-from dotenv import load_dotenv
-import os
-
-db = SQLAlchemy()
-jwt = JWTManager()
+from flask_migrate import Migrate
+from .models import db
+from .routes import user_bp
 
 def create_app():
-    load_dotenv()
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
-    app.config['JWT_SECRET_KEY'] = os.getenv("JWT_SECRET_KEY")
+
+    app.config.from_mapping(
+        SQLALCHEMY_DATABASE_URI="postgresql://postgres:postgres@postgres-userdb:5432/users",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SECRET_KEY="super-secret"  # you can load from .env later
+    )
 
     db.init_app(app)
-    jwt.init_app(app)
-    CORS(app)
+    Migrate(app, db)
 
-    from .routes import user_bp
     app.register_blueprint(user_bp)
 
     return app
