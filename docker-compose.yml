@@ -1,16 +1,24 @@
-version: '3.9'
-
 services:
   user-service:
     build: ./user-service
     container_name: user-service
     ports:
-      - "5000:5000"
+      - "5000:5000" # Map host 5000 to container 5000
     environment:
+      # Ensure this matches the connection string used in app/__init__.py
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/users_db
-      - JWT_SECRET_KEY=super-secret-key
+      - JWT_SECRET_KEY=super-secret-key # Use a strong, random key in production
+      - SECRET_KEY=a-different-super-secret # Flask's secret key
+      # Add Google OAuth credentials - REPLACE WITH ACTUAL VALUES or use .env file
+      - GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
+      - GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+      # Optional: Specify the redirect URI base if needed by Flask-Dance behind proxy
+      # - OAUTHLIB_INSECURE_TRANSPORT=1 # Only for development without HTTPS
     depends_on:
-      - db
+      db:
+        condition: service_healthy # Wait for db to be healthy
+    volumes:
+      - ./user-service:/app # Mount local code for development (optional)
 
   db:
     image: postgres:13
@@ -21,9 +29,14 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: users_db
     ports:
-      - "5432:5432"
+      - "5440:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck: # Add healthcheck for postgres
+      test: ["CMD-SHELL", "pg_isready -U postgres -d users_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata:
