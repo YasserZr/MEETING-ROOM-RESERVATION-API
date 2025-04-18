@@ -1,26 +1,138 @@
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2 # Use a specific version
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: echo stat | nc localhost 2181
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2 # Use a specific version matching Zookeeper
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      # Expose Kafka broker for external access if needed (e.g., local development tools)
+      # Use a different host port if 9092 is taken
+      - "9092:9092"
+      # Port for internal Docker network communication
+      # - "29092:29092" # Not strictly needed if using PLAINTEXT within docker network
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      # Listen on 9092 for internal Docker network traffic
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT #,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092 #,PLAINTEXT_HOST://localhost:9092 # Use kafka service name internally
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1 # Development setting
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1 # Development setting
+      # KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true' # Enable for convenience in dev, disable in prod
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/bin/kafka-topics --bootstrap-server kafka:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s # Give Kafka more time to start
+
   user-service:
     build: ./user-service
     container_name: user-service
     ports:
-      - "5000:5000" # Map host 5000 to container 5000
+      - "5000:5000"
     environment:
-      # Ensure this matches the connection string used in app/__init__.py
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/users_db
+      - DATABASE_URL=postgresql://postgres:postgres@user-db:5432/users_db
       - JWT_SECRET_KEY=super-secret-key # Use a strong, random key in production
       - SECRET_KEY=a-different-super-secret # Flask's secret key
-      # Add Google OAuth credentials - REPLACE WITH ACTUAL VALUES or use .env file
-      - GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
-      - GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
-      # Optional: Specify the redirect URI base if needed by Flask-Dance behind proxy
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID} # Load from .env
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET} # Load from .env
+      # Kafka Config for Consumer
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_RESERVATIONS_TOPIC=${KAFKA_RESERVATIONS_TOPIC:-reservations-topic} # Use env var or default
       # - OAUTHLIB_INSECURE_TRANSPORT=1 # Only for development without HTTPS
     depends_on:
-      db:
-        condition: service_healthy # Wait for db to be healthy
+      user-db:
+        condition: service_healthy
+      kafka: # Depends on Kafka being healthy
+        condition: service_healthy
     volumes:
-      - ./user-service:/app # Mount local code for development (optional)
+      - ./user-service:/app
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
-  db:
+  room-service:
+    build: ./room-service
+    container_name: room-service
+    ports:
+      - "5001:5001" # Assign a different port
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@room-db:5432/rooms_db
+      - JWT_SECRET_KEY=super-secret-key # Share or manage secrets appropriately
+      - SECRET_KEY=another-super-secret
+      - USER_SERVICE_URL=http://user-service:5000 # Added for admin check
+    depends_on:
+      room-db:
+        condition: service_healthy
+      user-service: # Depends on user-service for admin checks
+        condition: service_healthy
+    volumes:
+      - ./room-service:/app
+    command: ["python", "run.py", "--port=5001"] # Specify port inside container
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  reservation-service:
+    build: ./reservation-service
+    container_name: reservation-service
+    ports:
+      - "5002:5002" # Assign a different port
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@reservation-db:5432/reservations_db
+      - JWT_SECRET_KEY=super-secret-key # Share or manage secrets appropriately
+      - SECRET_KEY=yet-another-super-secret
+      # Add service URLs needed for inter-service communication
+      - USER_SERVICE_URL=http://user-service:5000
+      - ROOM_SERVICE_URL=http://room-service:5001
+      # Kafka Config for Producer
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_RESERVATIONS_TOPIC=${KAFKA_RESERVATIONS_TOPIC:-reservations-topic} # Use env var or default
+    depends_on:
+      reservation-db:
+        condition: service_healthy
+      # Add dependencies on other services for validation calls
+      user-service:
+        condition: service_healthy
+      room-service:
+        condition: service_healthy
+      kafka: # Depends on Kafka being healthy
+        condition: service_healthy
+    volumes:
+      - ./reservation-service:/app
+    command: ["python", "run.py", "--port=5002"] # Specify port inside container
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  user-db: # Renamed from 'db' for clarity
     image: postgres:13
     container_name: postgres-userdb
     restart: always
@@ -29,14 +141,56 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: users_db
     ports:
-      - "5440:5432"
+      - "5440:5432" # Keep unique host port mapping
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck: # Add healthcheck for postgres
+      - user-pgdata:/var/lib/postgresql/data # Use named volume
+    healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d users_db"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  room-db:
+    image: postgres:13
+    container_name: postgres-roomdb
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rooms_db
+    ports:
+      - "5441:5432" # Assign a different host port
+    volumes:
+      - room-pgdata:/var/lib/postgresql/data # Use named volume
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rooms_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  reservation-db:
+    image: postgres:13
+    container_name: postgres-reservationdb
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: reservations_db
+    ports:
+      - "5442:5432" # Assign a different host port
+    volumes:
+      - reservation-pgdata:/var/lib/postgresql/data # Use named volume
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reservations_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
-  pgdata:
+  user-pgdata: # Use distinct named volumes
+  room-pgdata:
+  reservation-pgdata:
+  # Kafka/Zookeeper volumes (optional, for persistence across docker-compose down/up)
+  # zookeeper-data:
+  # zookeeper-log:
+  # kafka-data:

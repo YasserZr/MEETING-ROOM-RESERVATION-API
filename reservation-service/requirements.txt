@@ -1,0 +1,11 @@
+Flask==2.3.2
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.5
+Flask-Cors==4.0.0
+Flask-JWT-Extended==4.6.0 # Added for token handling
+python-dotenv==1.0.1
+PyJWT==2.8.0 # Added for token handling
+psycopg2-binary==2.9.9
+requests==2.31.0 # Added for inter-service calls
+SQLAlchemy==2.0.29 # Explicitly add SQLAlchemy if needed for advanced features or type hints
+kafka-python-ng==2.1.0 # Added for Kafka integration (using -ng fork for potential improvements)

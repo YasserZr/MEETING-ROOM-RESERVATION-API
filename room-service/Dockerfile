@@ -4,6 +4,7 @@ FROM python:3.10-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV FLASK_APP=run.py
 
 # Install curl for health checks
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
@@ -18,8 +19,8 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy application code
 COPY . .
 
-# Expose Flask port
-EXPOSE 5000
+# Expose default port (can be overridden by docker-compose command)
+EXPOSE 5001
 
-# Run the app using host 0.0.0.0
-CMD ["python", "run.py"]
+# Default command (can be overridden by docker-compose command)
+CMD ["python", "run.py", "--port=5001"]
