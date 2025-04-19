@@ -1,6 +1,7 @@
 # auth.py
 
 from flask import Blueprint, redirect, url_for, jsonify, current_app, request
+from flask import session
 from flask_dance.contrib.google import make_google_blueprint, google
 from .models import db, User # Corrected import
 from .jwt_utils import generate_token # Corrected import
@@ -23,17 +24,25 @@ google_bp = make_google_blueprint(
 auth_bp.register_blueprint(google_bp, url_prefix="/login")
 
 
-@auth_bp.route("/login/google")
-def google_login_entry():
+#@auth_bp.route("/login/google")
+#def google_login_entry():
     # Redirect to Google's OAuth consent screen
-    return redirect(url_for("google.login"))
+    # Use the prefixed endpoint name because google_bp is registered under auth_bp
+#    return redirect(url_for("auth_bp.google.login"))
 
 # Renamed function to avoid conflict and match potential redirect_to usage
 @auth_bp.route("/login/google/authorized")
 def google_login_authorized():
+    # --- Add Logging ---
+    current_app.logger.info(f"Callback received. google.authorized = {google.authorized}")
+    current_app.logger.info(f"Session contents: {dict(session)}")
+    # --- End Logging ---
+
     if not google.authorized:
-        # Redirect back to login entry if not authorized
-        return redirect(url_for("auth_bp.google_login_entry"))
+        current_app.logger.warning("Google not authorized, redirecting back to login entry.")
+        # --- FIX: Use the correct endpoint name provided by Flask-Dance ---
+        return redirect(url_for("auth_bp.google.login"))
+        # --- END FIX ---
 
     try:
         resp = google.get("/oauth2/v2/userinfo")
