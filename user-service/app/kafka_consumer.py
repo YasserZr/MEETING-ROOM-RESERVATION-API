@@ -2,13 +2,20 @@ import json
 import logging
 import threading
 import time
+import os
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
-from flask import current_app
+from flask import current_app, jsonify
+from .models import db, User  # Assuming you need db and User model
 
 logger = logging.getLogger(__name__)
 consumer_thread = None
 stop_event = threading.Event()
+
+# Define Kafka configuration using environment variables
+KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
+RESERVATIONS_TOPIC = os.getenv('KAFKA_RESERVATIONS_TOPIC', 'reservations-topic')
+GROUP_ID = 'user-service-group' # Define a consumer group ID
 
 def process_message(message):
     """Placeholder function to process received Kafka messages."""
@@ -111,4 +118,75 @@ def stop_consumer_thread():
         consumer_thread = None
     else:
         logger.info("Kafka consumer thread not running or already stopped.")
+
+def consume_reservations(app):
+    """
+    Kafka consumer function that runs in a background thread.
+    Needs the Flask app instance to work within the application context.
+    """
+    consumer = None # Initialize consumer to None
+    try:
+        with app.app_context(): # Create an application context
+            current_app.logger.info(f"Attempting to connect Kafka consumer to {KAFKA_BOOTSTRAP_SERVERS}...")
+            consumer = KafkaConsumer(
+                RESERVATIONS_TOPIC,
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(','),
+                auto_offset_reset='earliest',
+                group_id=GROUP_ID,
+                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                consumer_timeout_ms=1000
+            )
+            current_app.logger.info(f"Kafka consumer connected to topic '{RESERVATIONS_TOPIC}'.")
+
+            while True: # Keep consuming messages
+                # Check for stop signal if you implement one
+                # if stop_event.is_set():
+                #    break
+
+                for message in consumer:
+                    try:
+                        reservation_data = message.value
+                        current_app.logger.info(f"Received reservation message: {reservation_data}")
+
+                        # --- Process the message ---
+                        user_id = reservation_data.get('user_id')
+                        status = reservation_data.get('status')
+
+                        if user_id and status == 'cancelled':
+                            user = User.query.get(user_id)
+                            if user:
+                                current_app.logger.info(f"Processing cancellation for user {user_id}")
+                                # db.session.commit() # Commit if changes were made
+                            else:
+                                current_app.logger.warning(f"User {user_id} not found for cancellation.")
+
+                    except json.JSONDecodeError:
+                        current_app.logger.error(f"Failed to decode JSON message: {message.value}")
+                    except Exception as e:
+                        # This exception handling is now INSIDE the app context
+                        current_app.logger.error(f"Error processing Kafka message: {e}", exc_info=True)
+
+                # Optional sleep if consumer_timeout_ms is not used or is long
+                # time.sleep(0.1)
+
+    except Exception as e:
+        # Log general consumer errors (like connection issues)
+        # Use the passed 'app' object's logger if current_app is unavailable
+        logger_instance = current_app.logger if current_app else app.logger
+        logger_instance.error(f"Kafka consumer error: {e}", exc_info=True)
+    finally:
+        if consumer:
+            consumer.close()
+            logger_instance = current_app.logger if current_app else app.logger
+            logger_instance.info("Kafka consumer closed.")
+
+
+def start_kafka_consumer_thread(app):
+    """Starts the Kafka consumer in a background daemon thread."""
+    current_app.logger.info(f"Starting Kafka consumer thread for topic '{RESERVATIONS_TOPIC}', group '{GROUP_ID}'...")
+    # Pass the app instance to the target function
+    thread = threading.Thread(target=consume_reservations, args=(app,), daemon=True)
+    thread.start()
+    current_app.logger.info("Kafka consumer background thread initiated.")
+    return thread
 
