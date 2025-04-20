@@ -175,9 +175,9 @@ services:
       reservation-db:
         condition: service_healthy
       user-service:
-        condition: service_healthy
+        condition: service_healthy  # Add health check for user-service
       room-service:
-        condition: service_healthy
+        condition: service_healthy  # Add health check for room-service
       kafka:
         condition: service_healthy
     volumes:

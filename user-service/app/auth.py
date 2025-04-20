@@ -122,25 +122,34 @@ def login():
 @auth_bp.route("/register", methods=["POST"])
 def register():
     data = request.get_json()
-    if not data or "username" not in data or "password" not in data:
-        return jsonify({"message": "Username and password are required"}), 400
+    if not data or "username" not in data or "password" not in data or "email" not in data:
+        return jsonify({"message": "Username, email, and password are required"}), 400
 
-    username = data["username"]
-    password = data["password"]
+    username = data["username"][:128]  # Limit username to 128 characters
+    email = data["email"][:128]        # Limit email to 128 characters
+    password = data["password"]        # Password length is hashed, no need to truncate
+    full_name = data.get("full_name", "")[:128]  # Limit full_name to 128 characters
+    role = data.get("role", "user")[:128]  # Default role is "user", limit to 128 characters
+
+    # Log truncated data for debugging (optional)
+    current_app.logger.debug(f"Truncated data: username={username}, email={email}, full_name={full_name}, role={role}")
 
     # Check if the user already exists
-    if User.query.filter_by(username=username).first():
-        return jsonify({"message": "User already exists"}), 409
+    if User.query.filter((User.username == username) | (User.email == email)).first():
+        return jsonify({"message": "User with this username or email already exists"}), 409
 
     # Create a new user with a hashed password
     hashed_password = generate_password_hash(password)
-    new_user = User(username=username, password=hashed_password)
+    new_user = User(username=username, email=email, password=hashed_password, full_name=full_name, role=role)
 
-    # Add the user to the database
-    db.session.add(new_user)
-    db.session.commit()
-
-    return jsonify({"message": "User registered successfully"}), 201
+    try:
+        db.session.add(new_user)
+        db.session.commit()
+        return jsonify({"message": "User registered successfully", "role": role}), 201
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error registering user: {e}")
+        return jsonify({"message": "Failed to register user", "error": str(e)}), 500
 
 
 @auth_bp.route("/logout")

@@ -18,20 +18,24 @@ RESERVATIONS_TOPIC = os.getenv('KAFKA_RESERVATIONS_TOPIC', 'reservations-topic')
 GROUP_ID = os.getenv('KAFKA_CONSUMER_GROUP', 'user-service-group')  # Updated to use environment variable
 
 def process_message(message):
-    """Placeholder function to process received Kafka messages."""
+    """Process received Kafka messages."""
     try:
         event = json.loads(message.value.decode('utf-8'))
         event_type = event.get("type")
         payload = event.get("payload")
-        logger.info(f"Received Kafka Event Type: {event_type}, Payload ID: {payload.get('id') if payload else 'N/A'}")
-        # Add actual processing logic here based on event_type
-        # e.g., update user data, send notification, etc.
+        logger.info(f"Received Kafka Event Type: {event_type}, Payload: {json.dumps(payload, indent=2)}")
+
+        # Handle specific event types
         if event_type == "RESERVATION_CREATED":
             logger.info(f"Processing RESERVATION_CREATED for user {payload.get('user_id')}")
         elif event_type == "RESERVATION_UPDATED":
-             logger.info(f"Processing RESERVATION_UPDATED for user {payload.get('user_id')}")
+            logger.info(f"Processing RESERVATION_UPDATED for user {payload.get('user_id')}")
         elif event_type == "RESERVATION_DELETED":
-             logger.info(f"Processing RESERVATION_DELETED for user {payload.get('user_id')}")
+            logger.info(f"Processing RESERVATION_DELETED for user {payload.get('user_id')}")
+        elif event_type == "TEST_EVENT":
+            logger.info("Test event received. No further action taken.")
+        else:
+            logger.warning(f"Unhandled event type: {event_type}")
 
     except json.JSONDecodeError:
         logger.error(f"Failed to decode Kafka message value: {message.value}")
@@ -43,9 +47,9 @@ def consume_messages(app):
     """Runs the Kafka consumer loop."""
     # Need app context to access config
     with app.app_context():
-        bootstrap_servers = current_app.config.get('KAFKA_BOOTSTRAP_SERVERS')
-        topic = current_app.config.get('KAFKA_RESERVATIONS_TOPIC')
-        group_id = current_app.config.get('KAFKA_CONSUMER_GROUP')
+        bootstrap_servers = current_app.config.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
+        topic = current_app.config.get('KAFKA_RESERVATIONS_TOPIC', 'reservations-topic')
+        group_id = current_app.config.get('KAFKA_CONSUMER_GROUP', 'user-service-group')
 
         if not all([bootstrap_servers, topic, group_id]):
             logger.error("Kafka consumer configuration missing (servers, topic, or group_id). Consumer not starting.")

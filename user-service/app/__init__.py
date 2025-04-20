@@ -46,7 +46,14 @@ def create_app():
     logging.getLogger("urllib3").setLevel(logging.DEBUG)
     logging.getLogger("werkzeug").setLevel(logging.INFO)
 
-    app.logger.info("Logging configured. Debugging enabled for oauthlib, requests, and urllib3.")
+    # Reduce verbosity of Kafka logs
+    logging.getLogger("kafka").setLevel(logging.WARNING)
+    logging.getLogger("kafka.conn").setLevel(logging.WARNING)
+    logging.getLogger("kafka.client").setLevel(logging.WARNING)
+    logging.getLogger("kafka.metrics").setLevel(logging.WARNING)
+    logging.getLogger("kafka.protocol").setLevel(logging.WARNING)
+
+    app.logger.info("Logging configured. Kafka logs set to WARNING level.")
 
     with app.app_context():
         # Import models here AFTER db is initialized with app

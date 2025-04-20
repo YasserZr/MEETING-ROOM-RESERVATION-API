@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: meeting-room-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: meeting-room.local
+    http:
+      paths:
+      - path: /users
+        pathType: Prefix
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 80
+      - path: /rooms
+        pathType: Prefix
+        backend:
+          service:
+            name: room-service
+            port:
+              number: 80
+      - path: /reservations
+        pathType: Prefix
+        backend:
+          service:
+            name: reservation-service
+            port:
+              number: 80

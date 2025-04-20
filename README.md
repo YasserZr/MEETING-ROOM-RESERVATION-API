@@ -319,6 +319,34 @@ A microservices-based API for managing meeting room reservations, using Kafka fo
         docker-compose logs -f user-service
         ```
 
+## Testing
+
+### Using `curl`
+1. Test the health endpoint of each service:
+    ```bash
+    curl http://localhost:5000/health  # User Service
+    curl http://localhost:5001/health  # Room Service
+    curl http://localhost:5002/health  # Reservation Service
+    ```
+
+2. Test creating a user:
+    ```bash
+    curl -X POST http://localhost:5000/users -H "Content-Type: application/json" -d '{"email": "test@example.com", "full_name": "Test User"}'
+    ```
+
+### Using Postman
+1. Import the provided Postman collection (if available) or manually create requests for each endpoint.
+2. Set the `Authorization` header with a valid JWT token for protected endpoints.
+
+### Automated Tests
+1. Write unit tests for each service using `pytest` or a similar framework.
+2. Run the tests:
+    ```bash
+    docker-compose exec user-service pytest
+    docker-compose exec room-service pytest
+    docker-compose exec reservation-service pytest
+    ```
+
 ## Teardown
 
 ```bash
