@@ -10,3 +10,4 @@ requests==2.31.0 # Added for inter-service calls
 SQLAlchemy==2.0.29 # Explicitly add SQLAlchemy if needed for advanced features or type hints
 kafka-python-ng==2.1.0 # Added for Kafka integration (using -ng fork for potential improvements)
 boto3>=1.20.0 # Added as dependency for kafka-python-ng's MSK SASL
+pytz

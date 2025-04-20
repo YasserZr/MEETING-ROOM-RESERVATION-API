@@ -1,7 +1,9 @@
 import jwt
 import datetime
 import os
-from flask import current_app # Import current_app to access config
+from flask import current_app, request, jsonify # Import current_app to access config
+from functools import wraps
+from .config import JWT_SECRET_KEY  # Ensure the secret key is imported
 
 # Function to generate JWT token
 def generate_token(user_id):
@@ -44,5 +46,25 @@ def decode_token(token):
     except Exception as e:
         # Log the exception e
         return None
+
+def token_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        if not token:
+            return jsonify({"message": "Token is missing"}), 401
+
+        try:
+            # Decode the token
+            token = token.split(" ")[1]  # Bearer <token>
+            decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+            request.user = decoded_token  # Attach user info to the request
+        except jwt.ExpiredSignatureError:
+            return jsonify({"message": "Token has expired"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"message": "Invalid token"}), 401
+
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ... potentially other utility functions ...

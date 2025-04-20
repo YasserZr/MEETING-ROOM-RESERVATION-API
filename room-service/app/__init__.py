@@ -20,6 +20,7 @@ def create_app():
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SECRET_KEY=os.getenv("SECRET_KEY", "another-super-secret"),
         JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY", "super-secret-key"), # Use the same JWT key as user-service
+        RESERVATION_SERVICE_URL=os.getenv("RESERVATION_SERVICE_URL", "http://reservation-service:5002") # Add this line
     )
 
     db.init_app(app)
