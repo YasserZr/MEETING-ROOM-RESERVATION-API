@@ -6,14 +6,13 @@ A microservices-based API for managing meeting room reservations, using Kafka fo
 
 ### 1. User Service (`/user-service`)
 
-*   Handles user registration, authentication (Google OAuth), profile management, and JWT generation.
+*   Handles user registration, authentication, profile management, and JWT generation.
 *   Manages user data (email, name, role).
 *   **Consumes Kafka events** from the `reservations-topic` (currently logs them).
 *   Port: 5000
 *   Database: `users_db` (PostgreSQL)
 *   Endpoints:
-    *   `/auth/login/google`: Initiates Google OAuth flow.
-    *   `/auth/login/google/authorized`: Callback URL for Google OAuth.
+    *   `/auth/login/google/authorized`: Placeholder for Google OAuth callback (logic removed).
     *   `/users/me` (GET): Get current user's profile (requires JWT).
     *   `/users` (GET): List all users (potentially admin only).
     *   `/users` (POST): Create a new user (potentially admin only or internal).

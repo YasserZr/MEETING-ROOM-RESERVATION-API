@@ -5,6 +5,7 @@ from flask_migrate import Migrate
 from flask_cors import CORS # Import CORS
 import os
 import logging # Import logging
+import sys # Import sys
 from dotenv import load_dotenv # dotenv loaded in run.py
 
 #Import Kafka consumer start function (create this file next)
@@ -25,16 +26,27 @@ def create_app():
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'a_default_jwt_secret_key')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
     # Initialize extensions
     db.init_app(app) # Use the db defined above
     migrate.init_app(app, db)
     CORS(app) # Enable CORS for all routes
 
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-    app.logger.setLevel(logging.INFO)
-    app.logger.info("User service application created successfully.")
+    # Logging configuration
+    logging.basicConfig(
+        level=logging.DEBUG,
+        stream=sys.stdout,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    logging.getLogger("oauthlib").setLevel(logging.DEBUG)
+    logging.getLogger("requests").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3").setLevel(logging.DEBUG)
+    logging.getLogger("werkzeug").setLevel(logging.INFO)
+
+    app.logger.info("Logging configured. Debugging enabled for oauthlib, requests, and urllib3.")
 
     with app.app_context():
         # Import models here AFTER db is initialized with app
@@ -45,10 +57,6 @@ def create_app():
 
         app.register_blueprint(routes.user_bp, url_prefix='/users') # Register the user blueprint with prefix
         app.register_blueprint(auth.auth_bp)   # Register the auth blueprint (prefix is defined in auth.py)
-
-        # Create database tables if they don't exist
-        # Consider using Flask-Migrate for production environments
-        # db.create_all() # Uncomment if you want Flask to create tables on startup
 
         # Start Kafka consumer in a background thread
         from .kafka_consumer import start_kafka_consumer_thread

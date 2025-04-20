@@ -5,12 +5,12 @@ from .jwt_utils import token_required, admin_required # Import decorators
 room_bp = Blueprint('room_bp', __name__)
 
 # Create a new room (Admin only)
-@room_bp.route('/', methods=['POST'])
+@room_bp.route('', methods=['POST']) # No trailing slash here
 @admin_required
 def create_room(user_id, token): # user_id and token passed by decorator
     data = request.get_json()
-    if not data or not data.get('name') or not data.get('capacity'):
-        return jsonify({"message": "Missing required fields: name and capacity"}), 400
+    if not data or not data.get('name') or data.get('capacity') is None:
+        return jsonify({"error": "Missing name or capacity"}), 400
 
     if Room.query.filter_by(name=data['name']).first():
         return jsonify({"message": f"Room with name '{data['name']}' already exists"}), 409
