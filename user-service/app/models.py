@@ -1,9 +1,9 @@
 from datetime import datetime
-from . import db  # Import db from __init__.py
 from sqlalchemy import Column, String, Integer, DateTime
 from sqlalchemy.sql import func
+from . import db  # Import db at the top to avoid delayed initialization issues
 
-class User(db.Model):
+class User(db.Model):  # Ensure User inherits from db.Model
     __tablename__ = "user"
     id = Column(Integer, primary_key=True)
     email = Column(String(128), nullable=False, unique=True)

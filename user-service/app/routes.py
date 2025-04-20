@@ -20,12 +20,14 @@ logging.basicConfig(level=logging.DEBUG)
 # Define admin_required decorator
 def admin_required(f):
     @wraps(f)
-    def decorated_function(*args, **kwargs):
-        user_details = request.user  # Assume user details are added to the request by token_required
-        if not user_details or user_details.get('role') != 'admin':
+    @token_required  # <== Automatically apply token_required inside
+    def decorated_function(user_id, token, *args, **kwargs):
+        user = User.query.get(user_id)
+        if not user or user.role != 'admin':
             return jsonify({"message": "Admin access required"}), 403
-        return f(*args, **kwargs)
+        return f(user_id, token, *args, **kwargs)
     return decorated_function
+
 
 user_bp = Blueprint('user_bp', __name__)  # Keep blueprint name simple
 
@@ -40,76 +42,70 @@ def get_profile(user_id, token):  # Add 'token' parameter
     # Return more user details if needed, ensure sensitive info is not exposed
     return jsonify({"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role})
 
-@user_bp.route('', methods=['POST'])  # Route relative to blueprint prefix '/users'
-def create_user():
-    data = request.get_json()
-    if not data or not data.get('email') or not data.get('full_name'):
-        return jsonify({"error": "Missing email or full_name"}), 400
-
-    # Check if user already exists
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({"error": "User with this email already exists"}), 409
-
-    user = User(
-        email=data['email'],
-        full_name=data['full_name'],
-        role=data.get('role', 'user')  # Default role to 'user'
-    )
-    db.session.add(user)
-    db.session.commit()
-    # Return the created user details (excluding sensitive info if any)
-    return jsonify({'message': 'User created', 'user': {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}}), 201
+from werkzeug.security import generate_password_hash  # Import for password hashing
 
 @user_bp.route('', methods=['GET'])  # Route relative to blueprint prefix '/users'
 @token_required
 @role_required(['admin'])  # Only admins can access this route
-def get_users(user_id):
+def get_users(user_id, token):  # Add 'token' parameter
     users = User.query.all()
     return jsonify([{'id': u.id, 'email': u.email, 'full_name': u.full_name, 'role': u.role} for u in users])
 
-# List all users (Admin only)
-@user_bp.route('/users', methods=['GET'])
-@admin_required
-def list_users(user_id, token):
-    users = User.query.all()
-    return jsonify([user.to_dict() for user in users]), 200
-
 # Update a user's role (Admin only)
-@user_bp.route('/users/<int:user_id>', methods=['PUT'])
-@admin_required
-def update_user_role(admin_id, token, user_id):
+@user_bp.route('/<int:user_id>', methods=['PUT'])
+@token_required
+@role_required(['admin']) 
+def update_user_role(user_id,token):
+    """Update the role of a user by their ID."""
+    current_app.logger.debug(f"Admin attempting to update role for user ID: {user_id}")
     user = User.query.get(user_id)
     if not user:
+        current_app.logger.error(f"User with ID {user_id} not found.")
         return jsonify({"message": "User not found"}), 404
 
     data = request.get_json()
-    new_role = data.get('role')
-    if not new_role:
+    if not data or 'role' not in data:
+        current_app.logger.error("Role is missing in the request payload.")
         return jsonify({"message": "Role is required"}), 400
+
+    new_role = data['role']
+    current_app.logger.debug(f"New role for user ID {user_id}: {new_role}")
 
     try:
         user.role = new_role
         db.session.commit()
-        return jsonify(user.to_dict()), 200
+        current_app.logger.info(f"User ID {user_id} role updated to {new_role}.")
+        return jsonify({"message": "User role updated successfully", "user": user.to_dict()}), 200
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Error updating role for user ID {user_id}: {e}")
         return jsonify({"message": "Failed to update user role", "error": str(e)}), 500
 
 # Delete a user (Admin only)
-@user_bp.route('/users/<int:user_id>', methods=['DELETE'])
-@admin_required
-def delete_user(admin_id, token, user_id):
+@user_bp.route('/<int:user_id>', methods=['DELETE'])
+@token_required
+@role_required(['admin']) 
+def delete_user(user_id, token):
+    """Delete a user by their ID."""
+    current_app.logger.debug(f"Admin attempting to delete user ID: {user_id}")
     user = User.query.get(user_id)
     if not user:
+        current_app.logger.error(f"User with ID {user_id} not found.")
         return jsonify({"message": "User not found"}), 404
 
     try:
         db.session.delete(user)
         db.session.commit()
+        current_app.logger.info(f"User ID {user_id} deleted successfully.")
         return jsonify({"message": "User deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Error deleting user ID {user_id}: {e}")
         return jsonify({"message": "Failed to delete user", "error": str(e)}), 500
+
+
+
+
 
 # Remove the duplicated auth blueprint and routes from this file
 # The auth logic (Google OAuth) should reside in auth.py

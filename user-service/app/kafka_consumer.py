@@ -6,7 +6,6 @@ import os
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 from flask import current_app, jsonify
-from .models import db, User  # Assuming you need db and User model
 
 logger = logging.getLogger(__name__)
 consumer_thread = None
@@ -17,8 +16,13 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
 RESERVATIONS_TOPIC = os.getenv('KAFKA_RESERVATIONS_TOPIC', 'reservations-topic')
 GROUP_ID = os.getenv('KAFKA_CONSUMER_GROUP', 'user-service-group')  # Updated to use environment variable
 
+# Global flag to prevent multiple threads
+consumer_thread_started = False
+consumer_thread_lock = threading.Lock()
+
 def process_message(message):
     """Process received Kafka messages."""
+    from .models import db, User  # Delayed import to avoid circular import
     try:
         event = json.loads(message.value.decode('utf-8'))
         event_type = event.get("type")
@@ -128,6 +132,7 @@ def consume_reservations(app):
     Kafka consumer function that runs in a background thread.
     Needs the Flask app instance to work within the application context.
     """
+    from .models import db, User  # Delayed import to avoid circular import
     consumer = None # Initialize consumer to None
     try:
         with app.app_context(): # Create an application context
@@ -187,10 +192,34 @@ def consume_reservations(app):
 
 def start_kafka_consumer_thread(app):
     """Starts the Kafka consumer in a background daemon thread."""
-    current_app.logger.info(f"Starting Kafka consumer thread for topic '{RESERVATIONS_TOPIC}', group '{GROUP_ID}'...")
-    # Pass the app instance to the target function
-    thread = threading.Thread(target=consume_reservations, args=(app,), daemon=True)
-    thread.start()
-    current_app.logger.info("Kafka consumer background thread initiated.")
-    return thread
+    global consumer_thread_started
+
+    with consumer_thread_lock:
+        if consumer_thread_started:
+            logger.info("Kafka consumer thread already running. Skipping initialization.")
+            return
+
+        consumer_thread_started = True
+        current_app.logger.info(f"Starting Kafka consumer thread for topic '{RESERVATIONS_TOPIC}', group '{GROUP_ID}'...")
+        # Pass the app instance to the target function
+        thread = threading.Thread(target=consume_reservations, args=(app,), daemon=True)
+        thread.start()
+        current_app.logger.info("Kafka consumer background thread initiated.")
+        return thread
+
+def start_kafka_consumer(app):
+    """Starts the Kafka consumer in a background thread."""
+    global consumer_thread_started
+
+    with consumer_thread_lock:
+        if consumer_thread_started:
+            logger.info("Kafka consumer thread already running. Skipping initialization.")
+            return
+
+        consumer_thread_started = True
+        logger.info(f"Starting Kafka consumer thread for topic '{RESERVATIONS_TOPIC}', group '{GROUP_ID}'...")
+        # Pass the app instance to the target function
+        thread = threading.Thread(target=consume_reservations, args=(app,), daemon=True)
+        thread.start()
+        logger.info("Kafka consumer background thread initiated.")
 

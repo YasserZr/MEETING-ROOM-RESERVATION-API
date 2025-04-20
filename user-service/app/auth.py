@@ -2,13 +2,13 @@
 
 from flask import Blueprint, jsonify, current_app, request, session, redirect, url_for
 import requests
-from .models import db, User
 from .jwt_utils import generate_token
 import os
 import sys
 from dotenv import load_dotenv
 from werkzeug.security import check_password_hash  # Import for password verification
 from werkzeug.security import generate_password_hash  # Import for password hashing
+from .models import db, User  # Import db and User at the top
 
 # Load environment variables from .env file
 load_dotenv()
@@ -39,6 +39,7 @@ def google_login():
 @auth_bp.route("/login/google/callback")
 def google_callback():
     """Handle the callback from Google's OAuth 2.0 server."""
+
     code = request.args.get("code")
     if not code:
         return jsonify({"message": "Authorization code not provided"}), 400
@@ -100,6 +101,7 @@ def google_callback():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
+
     data = request.get_json()
     if not data or "username" not in data or "password" not in data:
         return jsonify({"message": "Username and password are required"}), 400
@@ -121,6 +123,7 @@ def login():
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
+
     data = request.get_json()
     if not data or "username" not in data or "password" not in data or "email" not in data:
         return jsonify({"message": "Username, email, and password are required"}), 400
