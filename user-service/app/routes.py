@@ -9,7 +9,7 @@ import json
 # Change db import
 from . import db # Import db from __init__.py
 from .models import User # Import User model separately
-from .decorators import token_required # Import token_required from decorators
+from .decorators import token_required, role_required  # Import both token_required and role_required
 
 user_bp = Blueprint('user_bp', __name__) # Keep blueprint name simple
 
@@ -45,10 +45,11 @@ def create_user():
     # Return the created user details (excluding sensitive info if any)
     return jsonify({'message': 'User created', 'user': {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}}), 201
 
-@user_bp.route('', methods=['GET']) # Route relative to blueprint prefix '/users'
-def get_users():
+@user_bp.route('', methods=['GET'])  # Route relative to blueprint prefix '/users'
+@token_required
+@role_required(['admin'])  # Only admins can access this route
+def get_users(user_id):
     users = User.query.all()
-    # Corrected key name from 'name' to 'full_name' to match model
     return jsonify([{'id': u.id, 'email': u.email, 'full_name': u.full_name, 'role': u.role} for u in users])
 
 # Remove the duplicated auth blueprint and routes from this file

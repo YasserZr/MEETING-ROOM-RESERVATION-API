@@ -24,3 +24,15 @@ def token_required(f):
         return f(user_id, *args, **kwargs)
 
     return decorated
+
+def role_required(required_roles):
+    def decorator(f):
+        @wraps(f)
+        def decorated(user_id, *args, **kwargs):
+            from .models import User
+            user = User.query.get(user_id)
+            if not user or user.role not in required_roles:
+                return jsonify({"message": "Access denied"}), 403
+            return f(user_id, *args, **kwargs)
+        return decorated
+    return decorator

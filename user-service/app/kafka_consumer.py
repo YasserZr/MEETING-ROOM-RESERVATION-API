@@ -15,7 +15,7 @@ stop_event = threading.Event()
 # Define Kafka configuration using environment variables
 KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
 RESERVATIONS_TOPIC = os.getenv('KAFKA_RESERVATIONS_TOPIC', 'reservations-topic')
-GROUP_ID = 'user-service-group' # Define a consumer group ID
+GROUP_ID = os.getenv('KAFKA_CONSUMER_GROUP', 'user-service-group')  # Updated to use environment variable
 
 def process_message(message):
     """Placeholder function to process received Kafka messages."""

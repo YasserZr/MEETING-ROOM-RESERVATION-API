@@ -1,80 +1,124 @@
+version: '3.9'
+
 services:
+  # Zookeeper (for Kafka)
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.2 # Use a specific version
+    image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+
+  # Kafka broker
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     healthcheck:
-      test: echo stat | nc localhost 2181
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  kafka:
-    image: confluentinc/cp-kafka:7.3.2 # Use a specific version matching Zookeeper
-    container_name: kafka
-    depends_on:
-      zookeeper:
-        condition: service_healthy
+  # Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
     ports:
-      # Expose Kafka broker for external access if needed (e.g., local development tools)
-      # Use a different host port if 9092 is taken
-      - "9092:9092"
-      # Port for internal Docker network communication
-      # - "29092:29092" # Not strictly needed if using PLAINTEXT within docker network
+      - "8080:8080"
+    depends_on:
+      - kafka
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      # Listen on 9092 for internal Docker network traffic
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT #,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092 #,PLAINTEXT_HOST://localhost:9092 # Use kafka service name internally
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1 # Development setting
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1 # Development setting
-      # KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true' # Enable for convenience in dev, disable in prod
-    healthcheck:
-      test: ["CMD-SHELL", "/usr/bin/kafka-topics --bootstrap-server kafka:9092 --list || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-      start_period: 30s # Give Kafka more time to start
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
 
+  # User DB
+  user-db:
+    image: postgres:15
+    container_name: user-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: users_db
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+
+  # Room DB
+  room-db:
+    image: postgres:15
+    container_name: room-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rooms_db
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - room-db-data:/var/lib/postgresql/data
+
+  # Reservation DB
+  reservation-db:
+    image: postgres:15
+    container_name: reservation-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: reservations_db
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - reservation-db-data:/var/lib/postgresql/data
+
+  # User Service
   user-service:
     build: ./user-service
     container_name: user-service
     ports:
       - "5000:5000"
-    # Use env_file to load all variables from .env by default
     env_file:
       - .env
-    # Explicitly set variables needed by the container, potentially overriding .env
     environment:
-      # Ensure DATABASE_URL is set correctly for the container environment
-      # It should point to the 'user-db' service name.
-      # Make sure this is defined in your .env file or uncomment/set it here.
-      # Example: DATABASE_URL=postgresql://postgres:postgres@user-db:5432/users_db
-      - DATABASE_URL=${DATABASE_URL}
-      # Ensure these are loaded from .env via env_file or set here
+      - DATABASE_URL=${DATABASE_URL_USER:-postgresql://postgres:postgres@user-db:5432/users_db}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - SECRET_KEY=${SECRET_KEY}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      # Kafka Config for Consumer
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092 # Internal service name
-      - KAFKA_RESERVATIONS_TOPIC=${KAFKA_RESERVATIONS_TOPIC:-reservations-topic}
-      # --- FIX: Uncomment this for development OAuth over HTTP ---
-      - OAUTHLIB_INSECURE_TRANSPORT=1
+      - SECRET_KEY=${SECRET_KEY_USER:-${SECRET_KEY}}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_USERS_TOPIC=${KAFKA_USERS_TOPIC:-users-topic}
+      - KAFKA_CONSUMER_GROUP=user-service-group
     depends_on:
       user-db:
         condition: service_healthy
       kafka:
         condition: service_healthy
     volumes:
-      - ./user-service:/app # Mount local code for development
+      - ./user-service:/app
+    command: ["flask", "run", "--host=0.0.0.0", "--port=5000"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/health || exit 1"]
       interval: 15s
@@ -82,28 +126,28 @@ services:
       retries: 5
       start_period: 20s
 
+  # Room Service
   room-service:
     build: ./room-service
     container_name: room-service
     ports:
       - "5001:5001"
-    env_file: # Load common variables
+    env_file:
       - .env
     environment:
-      # Ensure DATABASE_URL points to room-db service
-      # Example: DATABASE_URL=postgresql://postgres:postgres@room-db:5432/rooms_db
-      - DATABASE_URL=${DATABASE_URL_ROOM:-postgresql://postgres:postgres@room-db:5432/rooms_db} # Use specific var or default
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY} # Loaded from .env
-      - SECRET_KEY=${SECRET_KEY_ROOM:-${SECRET_KEY}} # Use specific var or fallback to main SECRET_KEY
-      - USER_SERVICE_URL=http://user-service:5000
+      - DATABASE_URL=${DATABASE_URL_ROOM:-postgresql://postgres:postgres@room-db:5432/rooms_db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY_ROOM:-${SECRET_KEY}}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_ROOMS_TOPIC=${KAFKA_ROOMS_TOPIC:-rooms-topic}
     depends_on:
       room-db:
         condition: service_healthy
-      user-service:
+      kafka:
         condition: service_healthy
     volumes:
       - ./room-service:/app
-    command: ["flask", "run", "--host=0.0.0.0", "--port=5001"] # Use flask run command
+    command: ["flask", "run", "--host=0.0.0.0", "--port=5001"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
       interval: 15s
@@ -111,22 +155,21 @@ services:
       retries: 5
       start_period: 20s
 
+  # Reservation Service
   reservation-service:
     build: ./reservation-service
     container_name: reservation-service
     ports:
       - "5002:5002"
-    env_file: # Load common variables
+    env_file:
       - .env
     environment:
-      # Ensure DATABASE_URL points to reservation-db service
-      # Example: DATABASE_URL=postgresql://postgres:postgres@reservation-db:5432/reservations_db
-      - DATABASE_URL=${DATABASE_URL_RESERVATION:-postgresql://postgres:postgres@reservation-db:5432/reservations_db} # Use specific var or default
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY} # Loaded from .env
-      - SECRET_KEY=${SECRET_KEY_RESERVATION:-${SECRET_KEY}} # Use specific var or fallback to main SECRET_KEY
+      - DATABASE_URL=${DATABASE_URL_RESERVATION:-postgresql://postgres:postgres@reservation-db:5432/reservations_db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY_RESERVATION:-${SECRET_KEY}}
       - USER_SERVICE_URL=http://user-service:5000
       - ROOM_SERVICE_URL=http://room-service:5001
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092 # Internal service name
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_RESERVATIONS_TOPIC=${KAFKA_RESERVATIONS_TOPIC:-reservations-topic}
     depends_on:
       reservation-db:
@@ -139,7 +182,7 @@ services:
         condition: service_healthy
     volumes:
       - ./reservation-service:/app
-    command: ["flask", "run", "--host=0.0.0.0", "--port=5002"] # Use flask run command
+    command: ["flask", "run", "--host=0.0.0.0", "--port=5002"]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5002/health || exit 1"]
       interval: 15s
@@ -147,65 +190,7 @@ services:
       retries: 5
       start_period: 20s
 
-  user-db:
-    image: postgres:13
-    container_name: postgres-userdb
-    restart: always
-    environment:
-      # Use variables from .env or provide defaults
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB_USER:-users_db}
-    ports:
-      - "5440:5432"
-    volumes:
-      - user-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_USER:-users_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  room-db:
-    image: postgres:13
-    container_name: postgres-roomdb
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB_ROOM:-rooms_db}
-    ports:
-      - "5441:5432"
-    volumes:
-      - room-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_ROOM:-rooms_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  reservation-db:
-    image: postgres:13
-    container_name: postgres-reservationdb
-    restart: always
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB_RESERVATION:-reservations_db}
-    ports:
-      - "5442:5432"
-    volumes:
-      - reservation-pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB_RESERVATION:-reservations_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 volumes:
-  user-pgdata:
-  room-pgdata:
-  reservation-pgdata:
-  # zookeeper-data:
-  # zookeeper-log:
-  # kafka-data:
+  user-db-data:
+  room-db-data:
+  reservation-db-data:
