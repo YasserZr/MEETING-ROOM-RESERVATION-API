@@ -14,6 +14,9 @@ from .decorators import token_required, role_required  # Import both token_requi
 from functools import wraps
 from .jwt_utils import token_required  # Import token_required for base authentication
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
 # Define admin_required decorator
 def admin_required(f):
     @wraps(f)
@@ -28,9 +31,11 @@ user_bp = Blueprint('user_bp', __name__)  # Keep blueprint name simple
 
 @user_bp.route("/me", methods=["GET"])  # Route relative to blueprint prefix '/users'
 @token_required
-def get_profile(user_id):  # Assuming token_required injects user_id or user object
+def get_profile(user_id, token):  # Add 'token' parameter
+    current_app.logger.debug(f"Fetching profile for user_id: {user_id}")
     user = User.query.get(user_id)
     if not user:
+        current_app.logger.error("User not found")
         return jsonify({"message": "User not found"}), 404
     # Return more user details if needed, ensure sensitive info is not exposed
     return jsonify({"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role})
