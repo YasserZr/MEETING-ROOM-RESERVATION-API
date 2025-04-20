@@ -1,8 +1,7 @@
 # auth.py
 
-from flask import Blueprint, jsonify, current_app, request, session
-# Removed Flask-Dance imports
-# from flask_dance.contrib.google import make_google_blueprint, google
+from flask import Blueprint, jsonify, current_app, request, session, redirect, url_for
+import requests
 from .models import db, User
 from .jwt_utils import generate_token
 import os
@@ -16,43 +15,87 @@ load_dotenv()
 
 auth_bp = Blueprint("auth_bp", __name__, url_prefix='/auth')
 
-# Removed Flask-Dance blueprint registration
-# google_bp = make_google_blueprint(...)
-# auth_bp.register_blueprint(google_bp, url_prefix="/login")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5000/auth/login/google/callback")
+GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
-@auth_bp.route("/login/google/authorized")
-def google_login_authorized():
-    if not google.authorized:
-        return redirect(url_for("google.login"))
+@auth_bp.route("/login/google")
+def google_login():
+    """Redirect the user to Google's OAuth 2.0 authorization endpoint."""
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "consent"
+    }
+    auth_url = f"{GOOGLE_AUTH_URL}?{requests.compat.urlencode(params)}"
+    return redirect(auth_url)
 
-    resp = google.get("/oauth2/v2/userinfo")
-    if not resp.ok:
+@auth_bp.route("/login/google/callback")
+def google_callback():
+    """Handle the callback from Google's OAuth 2.0 server."""
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"message": "Authorization code not provided"}), 400
+
+    # Exchange the authorization code for an access token
+    token_data = {
+        "code": code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "grant_type": "authorization_code"
+    }
+    token_response = requests.post(GOOGLE_TOKEN_URL, data=token_data)
+    if not token_response.ok:
+        return jsonify({"message": "Failed to fetch access token"}), 400
+
+    access_token = token_response.json().get("access_token")
+    if not access_token:
+        return jsonify({"message": "Access token not provided"}), 400
+
+    # Fetch user info from Google
+    userinfo_response = requests.get(GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {access_token}"})
+    if not userinfo_response.ok:
         return jsonify({"message": "Failed to fetch user info from Google"}), 400
 
-    user_info = resp.json()
+    user_info = userinfo_response.json()
     email = user_info.get("email")
     full_name = user_info.get("name")
 
     if not email:
         return jsonify({"message": "Google account does not have an email"}), 400
 
-    # Check if user exists, otherwise create a new user
+    # Check if the user exists in the database
     user = User.query.filter_by(email=email).first()
-    if not user:
-        user = User(
-            email=email,
-            full_name=full_name,
-            role="attendee"  # Assign default role for Google users
-        )
-        db.session.add(user)
-        db.session.commit()
+    if user:
+        # User exists, generate a JWT token
+        token = generate_token(user.id)
+        if not token:
+            return jsonify({"message": "Failed to generate token"}), 500
 
-    # Generate JWT token
+        return jsonify({"message": "Login successful", "token": token, "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}})
+
+    # User does not exist, create a new user
+    user = User(
+        email=email,
+        full_name=full_name,
+        role="attendee"  # Assign default role for Google users
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    # Generate JWT token for the new user
     token = generate_token(user.id)
     if not token:
         return jsonify({"message": "Failed to generate token"}), 500
 
-    return jsonify({"message": "Login successful", "token": token})
+    return jsonify({"message": "User created and login successful", "token": token, "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}})
 
 
 @auth_bp.route("/login", methods=["POST"])

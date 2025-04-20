@@ -24,21 +24,18 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-user_bp = Blueprint('user_bp', __name__) # Keep blueprint name simple
+user_bp = Blueprint('user_bp', __name__)  # Keep blueprint name simple
 
-@user_bp.route("/me", methods=["GET"]) # Route relative to blueprint prefix '/users'
+@user_bp.route("/me", methods=["GET"])  # Route relative to blueprint prefix '/users'
 @token_required
-def get_profile(user_id): # Assuming token_required injects user_id or user object
-    # If token_required injects the user object directly:
-    # user = current_user # Or however token_required provides it
-    # If it only provides user_id:
+def get_profile(user_id):  # Assuming token_required injects user_id or user object
     user = User.query.get(user_id)
     if not user:
         return jsonify({"message": "User not found"}), 404
     # Return more user details if needed, ensure sensitive info is not exposed
     return jsonify({"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role})
 
-@user_bp.route('', methods=['POST']) # Route relative to blueprint prefix '/users'
+@user_bp.route('', methods=['POST'])  # Route relative to blueprint prefix '/users'
 def create_user():
     data = request.get_json()
     if not data or not data.get('email') or not data.get('full_name'):
@@ -51,7 +48,7 @@ def create_user():
     user = User(
         email=data['email'],
         full_name=data['full_name'],
-        role=data.get('role', 'user') # Default role to 'user'
+        role=data.get('role', 'user')  # Default role to 'user'
     )
     db.session.add(user)
     db.session.commit()

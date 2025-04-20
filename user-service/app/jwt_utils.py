@@ -55,10 +55,14 @@ def token_required(f):
             return jsonify({"message": "Token is missing"}), 401
 
         try:
-            # Decode the token
-            token = token.split(" ")[1]  # Bearer <token>
+            token = token.split(" ")[1]  # Extract the token from "Bearer <token>"
             decoded_token = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
-            request.user = decoded_token  # Attach user info to the request
+            user_id = decoded_token.get("sub")
+            if not user_id:
+                return jsonify({"message": "Invalid token"}), 401
+
+            kwargs['user_id'] = user_id
+            kwargs['token'] = token
         except jwt.ExpiredSignatureError:
             return jsonify({"message": "Token has expired"}), 401
         except jwt.InvalidTokenError:
