@@ -18,15 +18,15 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Define admin_required decorator
-def admin_required(f):
-    @wraps(f)
-    @token_required  # <== Automatically apply token_required inside
-    def decorated_function(user_id, token, *args, **kwargs):
-        user = User.query.get(user_id)
-        if not user or user.role != 'admin':
-            return jsonify({"message": "Admin access required"}), 403
-        return f(user_id, token, *args, **kwargs)
-    return decorated_function
+#def admin_required(f):
+#    @wraps(f)
+#    @token_required  # <== Automatically apply token_required inside
+#    def decorated_function(user_id, token, *args, **kwargs):
+#        user = User.query.get(user_id)
+#        if not user or user.role != 'admin':
+#            return jsonify({"message": "Admin access required"}), 403
+#        return f(user_id, token, *args, **kwargs)
+#    return decorated_function
 
 
 user_bp = Blueprint('user_bp', __name__)  # Keep blueprint name simple

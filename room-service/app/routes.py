@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from .models import db, Room
-from .jwt_utils import token_required, admin_required # Import decorators
+from .jwt_utils import token_required  # Fix typo: token_requird -> token_required
+from .decorators import token_required, role_required  # Import both token_required and role_required
 import requests
 from datetime import datetime
 from sqlalchemy import and_
@@ -9,7 +10,8 @@ room_bp = Blueprint('room_bp', __name__)
 
 # Create a new room (Admin only)
 @room_bp.route('', methods=['POST']) # No trailing slash here
-@admin_required
+@token_required
+@role_required(['admin'])
 def create_room(user_id, token): # user_id and token passed by decorator
     data = request.get_json()
     if not data or not data.get('name') or data.get('capacity') is None:
@@ -51,7 +53,8 @@ def get_room(user_id, token, room_id): # user_id and token passed by decorator
 
 # Update a room (Admin only)
 @room_bp.route('/<int:room_id>', methods=['PUT'])
-@admin_required
+@token_required
+@role_required(['admin'])
 def update_room(user_id, token, room_id): # user_id and token passed by decorator
     room = Room.query.get(room_id)
     if not room:
@@ -79,7 +82,8 @@ def update_room(user_id, token, room_id): # user_id and token passed by decorato
 
 # Delete a room (Admin only)
 @room_bp.route('/<int:room_id>', methods=['DELETE'])
-@admin_required
+@token_required
+@role_required(['admin'])
 def delete_room(user_id, token, room_id): # user_id and token passed by decorator
     room = Room.query.get(room_id)
     if not room:
@@ -97,6 +101,7 @@ def delete_room(user_id, token, room_id): # user_id and token passed by decorato
 # Check room availability (All authenticated users)
 @room_bp.route('/availability', methods=['GET'])
 @token_required
+@role_required(['admin'])
 def check_room_availability(user_id, token):
     start_time = request.args.get('start_time')
     end_time = request.args.get('end_time')
@@ -138,7 +143,8 @@ def check_room_availability(user_id, token):
 
 # Add a blackout period (Admin only)
 @room_bp.route('/<int:room_id>/blackout', methods=['POST'])
-@admin_required
+@token_required
+@role_required(['admin'])
 def add_blackout_period(user_id, token, room_id):
     room = Room.query.get(room_id)
     if not room:
