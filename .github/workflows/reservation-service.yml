@@ -96,6 +96,12 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
           
+      - name: Verify Kubernetes configuration
+        run: |
+          kubectl config view --minify
+          kubectl cluster-info
+          kubectl get nodes
+          
       - name: Set up Helm
         uses: azure/setup-helm@v3
         with:
@@ -120,4 +126,5 @@ jobs:
             --set monitoring.aws.region=${{ secrets.AWS_REGION }} \
             --set monitoring.aws.accessKey=${{ secrets.AWS_ACCESS_KEY_ID }} \
             --set monitoring.aws.secretKey=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
-            --set monitoring.grafana.adminPassword=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+            --set monitoring.grafana.adminPassword=${{ secrets.GRAFANA_ADMIN_PASSWORD }} \
+            --kube-context=$(kubectl config current-context)
