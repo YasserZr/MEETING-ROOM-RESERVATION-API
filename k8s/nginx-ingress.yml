@@ -4,12 +4,21 @@ metadata:
   name: meeting-room-ingress
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
   rules:
   - host: meeting-room.local
     http:
       paths:
       - path: /users
+        pathType: Prefix
+        backend:
+          service:
+            name: user-service
+            port:
+              number: 80
+      - path: /auth
         pathType: Prefix
         backend:
           service:

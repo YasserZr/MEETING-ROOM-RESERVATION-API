@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-config
+data:
+  FLASK_ENV: "production"
+  DATABASE_URL: "postgresql://postgres:postgres@user-db:5432/users_db"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_USERS_TOPIC: "users-topic"
+  KAFKA_CONSUMER_GROUP: "user-service-group"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-service-secrets
+type: Opaque
+stringData:
+  JWT_SECRET_KEY: "your-jwt-secret-key-replace-in-production"
+  SECRET_KEY: "your-flask-secret-key-replace-in-production"

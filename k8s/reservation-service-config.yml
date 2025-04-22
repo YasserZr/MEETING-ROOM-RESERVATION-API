@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: reservation-service-config
+data:
+  FLASK_ENV: "production"
+  DATABASE_URL: "postgresql://postgres:postgres@reservation-db:5432/reservations_db"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_RESERVATIONS_TOPIC: "reservations-topic"
+  USER_SERVICE_URL: "http://user-service"
+  ROOM_SERVICE_URL: "http://room-service"
+  ENABLE_EMAIL_NOTIFICATIONS: "false"
+  BOOKING_LEAD_TIME_HOURS: "1"
+  CANCELLATION_DEADLINE_HOURS: "1"
+  OPERATING_HOURS_START: "8"
+  OPERATING_HOURS_END: "18"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: reservation-service-secrets
+type: Opaque
+stringData:
+  JWT_SECRET_KEY: "your-jwt-secret-key-replace-in-production"
+  SECRET_KEY: "your-flask-secret-key-replace-in-production"
+  EMAIL_HOST: "smtp.example.com"
+  EMAIL_PORT: "587"
+  EMAIL_USERNAME: "notifications@example.com"
+  EMAIL_PASSWORD: "email-password-replace-in-production"
+  EMAIL_FROM: "no-reply@meetingrooms.example.com"

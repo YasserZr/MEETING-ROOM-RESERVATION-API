@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: room-service-config
+data:
+  FLASK_ENV: "production"
+  DATABASE_URL: "postgresql://postgres:postgres@room-db:5432/rooms_db"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_ROOMS_TOPIC: "rooms-topic"
+  RESERVATION_SERVICE_URL: "http://reservation-service"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: room-service-secrets
+type: Opaque
+stringData:
+  JWT_SECRET_KEY: "your-jwt-secret-key-replace-in-production"
+  SECRET_KEY: "your-flask-secret-key-replace-in-production"
