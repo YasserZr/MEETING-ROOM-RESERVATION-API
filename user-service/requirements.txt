@@ -14,3 +14,9 @@ boto3>=1.20.0 # Added as dependency for kafka-python-ng's MSK SASL
 watchtower>=2.0.0 # For CloudWatch Logs integration
 python-json-logger>=2.0.0 # For structured JSON logging
 botocore>=1.29.0 # AWS SDK core
+
+# Code quality and testing
+pytest==7.4.0
+pytest-cov==4.1.0
+flake8==6.1.0
+pylint==2.17.5

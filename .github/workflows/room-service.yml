@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better SonarQube analysis
     
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -30,10 +32,18 @@ jobs:
         pip install pytest pytest-cov
         pip install -r requirements.txt
         
-    - name: Test with pytest
+    - name: Test with pytest and generate coverage
       run: |
         cd room-service
-        pytest --cov=app
+        pytest --cov=app --cov-report=xml:coverage.xml --junitxml=test-results.xml
+    
+    - name: SonarQube Scan
+      uses: SonarSource/sonarqube-scan-action@master
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      with:
+        projectBaseDir: room-service
 
   build-and-push:
     needs: test

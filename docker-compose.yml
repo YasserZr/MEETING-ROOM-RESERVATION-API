@@ -118,6 +118,52 @@ services:
     volumes:
       - reservation-db-data:/var/lib/postgresql/data
 
+  # SonarQube Database
+  sonarqube-db:
+    image: postgres:13
+    container_name: sonarqube-db
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonar
+      POSTGRES_DB: sonar
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - sonarqube-db-data:/var/lib/postgresql/data
+  
+  # SonarQube
+  sonarqube:
+    image: sonarqube:lts
+    container_name: sonarqube
+    depends_on:
+      sonarqube-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonarqube-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-logs:/opt/sonarqube/logs
+      - sonarqube-extensions:/opt/sonarqube/extensions
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/api/system/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
   # User Service
   user-service:
     build: ./user-service
@@ -216,3 +262,7 @@ volumes:
   user-db-data:
   room-db-data:
   reservation-db-data:
+  sonarqube-db-data:
+  sonarqube-data:
+  sonarqube-logs:
+  sonarqube-extensions:
