@@ -33,7 +33,7 @@ jobs:
     - name: Test with pytest
       run: |
         cd room-service
-        pytest tests/ --cov=app
+        pytest --cov=app
 
   build-and-push:
     needs: test
@@ -105,4 +105,9 @@ jobs:
             --set roomService.image.repository=${{ secrets.DOCKER_HUB_USERNAME }}/meeting-room-room-service \
             --set roomService.image.tag=sha-${{ github.sha }} \
             --set dbSecrets.roomDbPassword=${{ secrets.ROOM_DB_PASSWORD }} \
-            --set jwtSecret=${{ secrets.JWT_SECRET_KEY }}
+            --set jwtSecret=${{ secrets.JWT_SECRET_KEY }} \
+            --set monitoring.enabled=true \
+            --set monitoring.aws.region=${{ secrets.AWS_REGION }} \
+            --set monitoring.aws.accessKey=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            --set monitoring.aws.secretKey=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            --set monitoring.grafana.adminPassword=${{ secrets.GRAFANA_ADMIN_PASSWORD }}

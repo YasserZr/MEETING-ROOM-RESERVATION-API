@@ -14,9 +14,6 @@ def create_app():
     app = Flask(__name__)
     CORS(app) # Enable CORS for all routes
 
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-
     # Load configuration from environment variables
     app.config.from_mapping(
         SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL", "postgresql://postgres:postgres@reservation-db:5432/reservations_db"),
@@ -27,6 +24,18 @@ def create_app():
         KAFKA_BOOTSTRAP_SERVERS=os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
         KAFKA_RESERVATIONS_TOPIC=os.getenv("KAFKA_RESERVATIONS_TOPIC"),
     )
+
+    # Setup structured logging
+    from .config import setup_logging
+    logger = setup_logging()
+    app.logger.handlers = []
+    for handler in logger.handlers:
+        app.logger.addHandler(handler)
+    app.logger.setLevel(logger.level)
+
+    # Reduce verbosity of third-party logs
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
 
     # Initialize Kafka Producer (implementation in kafka_producer.py)
     # init_kafka_producer(app) # We will initialize producer on demand in routes for simplicity now
@@ -47,6 +56,6 @@ def create_app():
         #    kafka_status = "disconnected"
         return {"status": "healthy"} #, "kafka": kafka_status}
 
-    app.logger.info("Reservation service application created successfully.")
+    app.logger.info({"message": "Reservation service application created successfully", "service": "reservation-service"})
 
     return app

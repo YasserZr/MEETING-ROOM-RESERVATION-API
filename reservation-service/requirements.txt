@@ -11,3 +11,6 @@ SQLAlchemy==2.0.29 # Explicitly add SQLAlchemy if needed for advanced features o
 kafka-python-ng==2.1.0 # Added for Kafka integration (using -ng fork for potential improvements)
 boto3>=1.20.0 # Added as dependency for kafka-python-ng's MSK SASL
 pytz
+watchtower>=2.0.0 # For CloudWatch Logs integration
+python-json-logger>=2.0.0 # For structured JSON logging
+botocore>=1.29.0 # AWS SDK core

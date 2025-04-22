@@ -1,0 +1,229 @@
+{{- if .Values.monitoring.enabled -}}
+{{- if .Values.monitoring.aws.cloudWatchAlarms -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudwatch-alarms
+  namespace: monitoring
+data:
+  cloudwatch-alarms.json: |
+    {
+      "alarms": [
+        {
+          "name": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.name }}",
+          "description": "Alert when error rate exceeds threshold",
+          "namespace": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.namespace }}",
+          "metricName": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.metricName }}",
+          "dimensions": [
+            {
+              "name": "ServiceName",
+              "value": "MeetingRoomAPI"
+            }
+          ],
+          "statistic": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.statistic }}",
+          "period": {{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.period }},
+          "evaluationPeriods": {{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.evaluationPeriods }},
+          "threshold": {{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.threshold }},
+          "comparisonOperator": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.comparisonOperator }}",
+          "treatMissingData": "notBreaching"
+        },
+        {
+          "name": "HighCPUUsage",
+          "description": "Alert when CPU usage is high",
+          "namespace": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.namespace }}",
+          "metricName": "CPUUtilization",
+          "dimensions": [
+            {
+              "name": "ServiceName",
+              "value": "MeetingRoomAPI"
+            }
+          ],
+          "statistic": "Average",
+          "period": 60,
+          "evaluationPeriods": 3,
+          "threshold": 80,
+          "comparisonOperator": "GreaterThanThreshold",
+          "treatMissingData": "notBreaching"
+        },
+        {
+          "name": "HighMemoryUsage",
+          "description": "Alert when memory usage is high",
+          "namespace": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.namespace }}",
+          "metricName": "MemoryUtilization",
+          "dimensions": [
+            {
+              "name": "ServiceName",
+              "value": "MeetingRoomAPI"
+            }
+          ],
+          "statistic": "Average",
+          "period": 60,
+          "evaluationPeriods": 3,
+          "threshold": 85,
+          "comparisonOperator": "GreaterThanThreshold",
+          "treatMissingData": "notBreaching"
+        },
+        {
+          "name": "ApiLatency",
+          "description": "Alert when API latency is high",
+          "namespace": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.namespace }}",
+          "metricName": "Latency",
+          "dimensions": [
+            {
+              "name": "ServiceName",
+              "value": "MeetingRoomAPI"
+            }
+          ],
+          "statistic": "Average",
+          "period": 60,
+          "evaluationPeriods": 3,
+          "threshold": 1000,
+          "comparisonOperator": "GreaterThanThreshold",
+          "treatMissingData": "notBreaching"
+        },
+        {
+          "name": "Database5xxErrors",
+          "description": "Alert when database errors occur",
+          "namespace": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.namespace }}",
+          "metricName": "DatabaseErrors",
+          "dimensions": [
+            {
+              "name": "ServiceName",
+              "value": "MeetingRoomAPI"
+            }
+          ],
+          "statistic": "Sum",
+          "period": 60,
+          "evaluationPeriods": 1,
+          "threshold": 1,
+          "comparisonOperator": "GreaterThanThreshold",
+          "treatMissingData": "notBreaching"
+        }
+      ]
+    }
+---
+# CloudWatch Metrics Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudwatch-agent
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloudwatch-agent
+  template:
+    metadata:
+      labels:
+        app: cloudwatch-agent
+    spec:
+      containers:
+        - name: cloudwatch-agent
+          image: amazon/cloudwatch-agent:latest
+          env:
+            - name: AWS_REGION
+              value: {{ .Values.monitoring.aws.region }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: access-key
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-credentials
+                  key: secret-key
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: cloudwatch-config
+              mountPath: /etc/cwagentconfig
+      volumes:
+        - name: cloudwatch-config
+          configMap:
+            name: cloudwatch-agent-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudwatch-agent-config
+  namespace: monitoring
+data:
+  cwagentconfig.json: |
+    {
+      "agent": {
+        "metrics_collection_interval": 60,
+        "run_as_user": "cwagent"
+      },
+      "logs": {
+        "logs_collected": {
+          "files": {
+            "collect_list": [
+              {
+                "file_path": "/var/log/user-service/*.log",
+                "log_group_name": "{{ .Values.monitoring.aws.cloudWatchLogGroup }}",
+                "log_stream_name": "user-service-{instance_id}",
+                "timezone": "UTC"
+              },
+              {
+                "file_path": "/var/log/room-service/*.log",
+                "log_group_name": "{{ .Values.monitoring.aws.cloudWatchLogGroup }}",
+                "log_stream_name": "room-service-{instance_id}",
+                "timezone": "UTC"
+              },
+              {
+                "file_path": "/var/log/reservation-service/*.log",
+                "log_group_name": "{{ .Values.monitoring.aws.cloudWatchLogGroup }}",
+                "log_stream_name": "reservation-service-{instance_id}",
+                "timezone": "UTC"
+              }
+            ]
+          }
+        }
+      },
+      "metrics": {
+        "namespace": "{{ .Values.monitoring.aws.cloudWatchAlarms.errorRateAlarm.namespace }}",
+        "metrics_collected": {
+          "cpu": {
+            "resources": [
+              "*"
+            ],
+            "measurement": [
+              "cpu_usage_idle",
+              "cpu_usage_user",
+              "cpu_usage_system"
+            ],
+            "metrics_collection_interval": 60
+          },
+          "disk": {
+            "resources": [
+              "/"
+            ],
+            "measurement": [
+              "disk_used_percent"
+            ],
+            "metrics_collection_interval": 60
+          },
+          "mem": {
+            "measurement": [
+              "mem_used_percent"
+            ],
+            "metrics_collection_interval": 60
+          }
+        },
+        "append_dimensions": {
+          "ImageId": "${aws:ImageId}",
+          "InstanceId": "${aws:InstanceId}",
+          "InstanceType": "${aws:InstanceType}",
+          "ServiceName": "MeetingRoomAPI"
+        }
+      }
+    }
+{{- end -}}
+{{- end -}}

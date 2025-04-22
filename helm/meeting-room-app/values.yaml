@@ -4,17 +4,17 @@ global:
   environment: production
 
 # Secrets for JWT and database passwords
-jwtSecret: "changeme"
+jwtSecret: "ce8a7c37deef6ebf578e2971d9e06673214631baf629cc16e870b731bba4ff0c"
 dbSecrets:
-  userDbPassword: "changeme"
-  roomDbPassword: "changeme"
-  reservationDbPassword: "changeme"
+  userDbPassword: "postgres"
+  roomDbPassword: "postgres"
+  reservationDbPassword: "postgres"
 
 # User Service configuration
 userService:
   name: user-service
   image:
-    repository: dockerhub-username/meeting-room-user-service
+    repository: yasserzr/meeting-room-user-service
     tag: latest
     pullPolicy: Always
   replicas: 2
@@ -27,7 +27,7 @@ userService:
       memory: 256Mi
   port: 5000
   env:
-    secretKey: "changeme"
+    secretKey: "1d1a8ba2648f198a712c4996e5ee6207938ba0a0c83a5047"
     kafkaBootstrapServers: "kafka:9092"
     kafkaUsersTopic: "users-topic"
 
@@ -35,7 +35,7 @@ userService:
 roomService:
   name: room-service
   image:
-    repository: dockerhub-username/meeting-room-room-service
+    repository: yasserzr/meeting-room-room-service
     tag: latest
     pullPolicy: Always
   replicas: 2
@@ -48,7 +48,7 @@ roomService:
       memory: 256Mi
   port: 5001
   env:
-    secretKey: "changeme"
+    secretKey: "1d1a8ba2648f198a712c4996e5ee6207938ba0a0c83a5047"
     kafkaBootstrapServers: "kafka:9092"
     kafkaRoomsTopic: "rooms-topic"
 
@@ -56,7 +56,7 @@ roomService:
 reservationService:
   name: reservation-service
   image:
-    repository: dockerhub-username/meeting-room-reservation-service
+    repository: yasserzr/meeting-room-reservation-service
     tag: latest
     pullPolicy: Always
   replicas: 2
@@ -69,7 +69,7 @@ reservationService:
       memory: 256Mi
   port: 5002
   env:
-    secretKey: "changeme"
+    secretKey: "1d1a8ba2648f198a712c4996e5ee6207938ba0a0c83a5047"
     kafkaBootstrapServers: "kafka:9092"
     kafkaReservationsTopic: "reservations-topic"
     userServiceUrl: "http://user-service:5000"
@@ -168,3 +168,31 @@ nginx:
       memory: 256Mi
   configMap:
     name: nginx-conf
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  aws:
+    region: "us-east-1"
+    accessKey: ""
+    secretKey: ""
+    cloudWatchLogGroup: "meeting-room-api-logs"
+    cloudWatchAlarms:
+      errorRateAlarm:
+        name: "MeetingRoomAPIErrorRate"
+        threshold: 5
+        evaluationPeriods: 1
+        period: 60
+        comparisonOperator: "GreaterThanThreshold"
+        namespace: "MeetingRoomAPI"
+        metricName: "ErrorCount"
+        statistic: "Sum"
+  grafana:
+    adminPassword: "admin123" # Should be changed in production
+    dashboards:
+      enabled: true
+  loki:
+    retention: 7d
+    replicationFactor: 1
+  fluentBit:
+    buffer: 5MB

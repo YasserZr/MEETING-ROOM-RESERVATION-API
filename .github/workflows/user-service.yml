@@ -105,4 +105,9 @@ jobs:
             --set userService.image.repository=${{ secrets.DOCKER_HUB_USERNAME }}/meeting-room-user-service \
             --set userService.image.tag=sha-${{ github.sha }} \
             --set dbSecrets.userDbPassword=${{ secrets.USER_DB_PASSWORD }} \
-            --set jwtSecret=${{ secrets.JWT_SECRET_KEY }}
+            --set jwtSecret=${{ secrets.JWT_SECRET_KEY }} \
+            --set monitoring.enabled=true \
+            --set monitoring.aws.region=${{ secrets.AWS_REGION }} \
+            --set monitoring.aws.accessKey=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            --set monitoring.aws.secretKey=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            --set monitoring.grafana.adminPassword=${{ secrets.GRAFANA_ADMIN_PASSWORD }}

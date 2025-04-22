@@ -5,6 +5,7 @@ FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=run.py
+ENV LOG_LEVEL=INFO
 
 # Install curl for health checks
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
@@ -18,6 +19,12 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 # Copy application code
 COPY . .
+
+# Create log directory
+RUN mkdir -p /var/log/room-service
+
+# Set volume for logs
+VOLUME ["/var/log/room-service"]
 
 # Expose default port (can be overridden by docker-compose command)
 EXPOSE 5001

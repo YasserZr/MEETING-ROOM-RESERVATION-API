@@ -7,7 +7,6 @@ import os
 import logging # Import logging
 import sys # Import sys
 from dotenv import load_dotenv # dotenv loaded in run.py
-from logging.handlers import RotatingFileHandler # Import RotatingFileHandler
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,16 +32,13 @@ def create_app():
     migrate.init_app(app, db)
     CORS(app) # Enable CORS for all routes
 
-    # Logging configuration
-    logging.basicConfig(
-        level=logging.DEBUG,
-        stream=sys.stdout,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    logging.getLogger("oauthlib").setLevel(logging.DEBUG)
-    logging.getLogger("requests").setLevel(logging.DEBUG)
-    logging.getLogger("urllib3").setLevel(logging.DEBUG)
-    logging.getLogger("werkzeug").setLevel(logging.INFO)
+    # Setup structured logging
+    from .config import setup_logging
+    logger = setup_logging()
+    app.logger.handlers = []
+    for handler in logger.handlers:
+        app.logger.addHandler(handler)
+    app.logger.setLevel(logger.level)
 
     # Reduce verbosity of Kafka logs
     logging.getLogger("kafka").setLevel(logging.WARNING)
@@ -51,22 +47,7 @@ def create_app():
     logging.getLogger("kafka.metrics").setLevel(logging.WARNING)
     logging.getLogger("kafka.protocol").setLevel(logging.WARNING)
 
-    app.logger.info("Logging configured. Kafka logs set to WARNING level.")
-
-    # Configure logging to a file
-    if not app.debug:
-        log_file = '/home/hadoop/MEETING-ROOM-RESERVATION-API/user-service/app.log'
-        log_dir = os.path.dirname(log_file)
-
-        # Ensure the directory exists
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-
-        file_handler = RotatingFileHandler(log_file, maxBytes=10240, backupCount=10)
-        file_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        app.logger.addHandler(file_handler)
+    app.logger.info({"message": "Application starting", "service": "user-service"})
 
     with app.app_context():
         # Import models here AFTER db is initialized with app
