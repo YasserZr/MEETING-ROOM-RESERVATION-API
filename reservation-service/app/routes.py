@@ -9,6 +9,7 @@ import pytz  # For timezone handling
 from email.utils import formatdate  # For RFC 2822 date formatting
 import os  # Import os to read environment variables
 from sqlalchemy.sql import func  # Import for aggregation
+import requests  # Add missing import for requests
 
 reservation_bp = Blueprint('reservation_bp', __name__)
 
@@ -20,7 +21,6 @@ BOOKING_POLICIES = {
     "staff": {"max_days_in_advance": 30},           # Staff can book up to 30 days in advance
     "guest": {"max_days_in_advance": 7}             # Guests can book up to 7 days in advance
 }
-
 # Helper function to check for overlapping reservations
 def check_overlap(room_id, start_time, end_time, exclude_reservation_id=None):
     query = Reservation.query.filter(
