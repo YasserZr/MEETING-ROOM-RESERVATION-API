@@ -1,0 +1,109 @@
+{{- range $db := list "userDb" "roomDb" "reservationDb" }}
+{{- $dbValues := index $.Values.databases $db }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $dbValues.name }}-pvc
+  namespace: {{ $.Values.global.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ $dbValues.persistence.size }}
+  storageClassName: {{ $dbValues.persistence.storageClass }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $dbValues.name }}-config
+  namespace: {{ $.Values.global.namespace }}
+data:
+  postgres-init.sh: |
+    #!/bin/bash
+    set -e
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+      CREATE USER app WITH PASSWORD 'app';
+      GRANT ALL PRIVILEGES ON DATABASE "$POSTGRES_DB" TO app;
+    EOSQL
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $dbValues.name }}
+  namespace: {{ $.Values.global.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ $dbValues.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $dbValues.name }}
+    spec:
+      containers:
+      - name: {{ $dbValues.name }}
+        image: {{ $dbValues.image }}
+        ports:
+        - containerPort: {{ $dbValues.port }}
+        env:
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-secrets
+              key: {{ if eq $db "userDb" }}user-db-password{{ else if eq $db "roomDb" }}room-db-password{{ else }}reservation-db-password{{ end }}
+        - name: POSTGRES_DB
+          value: {{ $db | replace "Db" "_db" }}
+        resources:
+          limits:
+            cpu: {{ $dbValues.resources.limits.cpu }}
+            memory: {{ $dbValues.resources.limits.memory }}
+          requests:
+            cpu: {{ $dbValues.resources.requests.cpu }}
+            memory: {{ $dbValues.resources.requests.memory }}
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ $dbValues.name }}-pvc
+      - name: init-scripts
+        configMap:
+          name: {{ $dbValues.name }}-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $dbValues.name }}
+  namespace: {{ $.Values.global.namespace }}
+spec:
+  selector:
+    app: {{ $dbValues.name }}
+  ports:
+  - port: {{ $dbValues.port }}
+    targetPort: {{ $dbValues.port }}
+  type: ClusterIP
+{{- end }}

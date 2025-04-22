@@ -1,0 +1,170 @@
+# Global values
+global:
+  namespace: meeting-room
+  environment: production
+
+# Secrets for JWT and database passwords
+jwtSecret: "changeme"
+dbSecrets:
+  userDbPassword: "changeme"
+  roomDbPassword: "changeme"
+  reservationDbPassword: "changeme"
+
+# User Service configuration
+userService:
+  name: user-service
+  image:
+    repository: dockerhub-username/meeting-room-user-service
+    tag: latest
+    pullPolicy: Always
+  replicas: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  port: 5000
+  env:
+    secretKey: "changeme"
+    kafkaBootstrapServers: "kafka:9092"
+    kafkaUsersTopic: "users-topic"
+
+# Room Service configuration
+roomService:
+  name: room-service
+  image:
+    repository: dockerhub-username/meeting-room-room-service
+    tag: latest
+    pullPolicy: Always
+  replicas: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  port: 5001
+  env:
+    secretKey: "changeme"
+    kafkaBootstrapServers: "kafka:9092"
+    kafkaRoomsTopic: "rooms-topic"
+
+# Reservation Service configuration
+reservationService:
+  name: reservation-service
+  image:
+    repository: dockerhub-username/meeting-room-reservation-service
+    tag: latest
+    pullPolicy: Always
+  replicas: 2
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  port: 5002
+  env:
+    secretKey: "changeme"
+    kafkaBootstrapServers: "kafka:9092"
+    kafkaReservationsTopic: "reservations-topic"
+    userServiceUrl: "http://user-service:5000"
+    roomServiceUrl: "http://room-service:5001"
+
+# Database configurations
+databases:
+  userDb:
+    name: user-db
+    image: postgres:15
+    port: 5432
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+    persistence:
+      size: 1Gi
+      storageClass: standard
+  roomDb:
+    name: room-db
+    image: postgres:15
+    port: 5432
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+    persistence:
+      size: 1Gi
+      storageClass: standard
+  reservationDb:
+    name: reservation-db
+    image: postgres:15
+    port: 5432
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+    persistence:
+      size: 1Gi
+      storageClass: standard
+
+# Kafka configuration
+kafka:
+  name: kafka
+  enabled: true
+  replicas: 1
+  image: confluentinc/cp-kafka:7.3.0
+  port: 9092
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  persistence:
+    size: 2Gi
+    storageClass: standard
+  zookeeper:
+    name: zookeeper
+    image: confluentinc/cp-zookeeper:7.3.0
+    port: 2181
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 200m
+        memory: 256Mi
+    persistence:
+      size: 1Gi
+      storageClass: standard
+
+# Nginx Ingress configuration
+nginx:
+  name: nginx
+  enabled: true
+  replicas: 2
+  image: nginx:latest
+  port: 80
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  configMap:
+    name: nginx-conf

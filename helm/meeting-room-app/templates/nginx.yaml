@@ -1,0 +1,184 @@
+{{- if .Values.nginx.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.nginx.configMap.name }}
+  namespace: {{ .Values.global.namespace }}
+data:
+  nginx.conf: |
+    worker_processes 1;
+
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        include mime.types;
+        default_type application/octet-stream;
+        sendfile on;
+        keepalive_timeout 65;
+
+        upstream user-service {
+            server {{ .Values.userService.name }}:{{ .Values.userService.port }};
+        }
+
+        upstream room-service {
+            server {{ .Values.roomService.name }}:{{ .Values.roomService.port }};
+        }
+
+        upstream reservation-service {
+            server {{ .Values.reservationService.name }}:{{ .Values.reservationService.port }};
+        }
+
+        server {
+            listen 80;
+            server_name localhost;
+
+            # User Service endpoints
+            location /users {
+                proxy_pass http://user-service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+
+            # Auth endpoints
+            location /auth {
+                proxy_pass http://user-service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+
+            # Room Service endpoints
+            location /rooms {
+                proxy_pass http://room-service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+
+            # Reservation Service endpoints
+            location /reservations {
+                proxy_pass http://reservation-service;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            }
+
+            # Health check endpoint
+            location /health {
+                return 200 'NGINX is healthy\n';
+                add_header Content-Type text/plain;
+            }
+
+            error_page 500 502 503 504 /50x.html;
+            location = /50x.html {
+                root /usr/share/nginx/html;
+            }
+        }
+    }
+---
+# NGINX Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.nginx.name }}
+  namespace: {{ .Values.global.namespace }}
+spec:
+  replicas: {{ .Values.nginx.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.nginx.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.nginx.name }}
+    spec:
+      containers:
+      - name: {{ .Values.nginx.name }}
+        image: {{ .Values.nginx.image }}
+        ports:
+        - containerPort: {{ .Values.nginx.port }}
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+        resources:
+          limits:
+            cpu: {{ .Values.nginx.resources.limits.cpu }}
+            memory: {{ .Values.nginx.resources.limits.memory }}
+          requests:
+            cpu: {{ .Values.nginx.resources.requests.cpu }}
+            memory: {{ .Values.nginx.resources.requests.memory }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.nginx.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.nginx.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: {{ .Values.nginx.configMap.name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.nginx.name }}
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selector:
+    app: {{ .Values.nginx.name }}
+  ports:
+  - port: {{ .Values.nginx.port }}
+    targetPort: {{ .Values.nginx.port }}
+  type: LoadBalancer
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: meeting-room-ingress
+  namespace: {{ .Values.global.namespace }}
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /users(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.userService.name }}
+            port:
+              number: {{ .Values.userService.port }}
+      - path: /auth(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.userService.name }}
+            port:
+              number: {{ .Values.userService.port }}
+      - path: /rooms(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.roomService.name }}
+            port:
+              number: {{ .Values.roomService.port }}
+      - path: /reservations(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.reservationService.name }}
+            port:
+              number: {{ .Values.reservationService.port }}
+{{- end }}

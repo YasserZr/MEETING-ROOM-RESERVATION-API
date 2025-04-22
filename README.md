@@ -352,3 +352,143 @@ A microservices-based API for managing meeting room reservations, using Kafka fo
 ```bash
 docker-compose down -v # -v removes volumes (database data, kafka data if volumes defined)
 ```
+
+# Meeting Room Reservation System
+
+## CI/CD Pipeline with GitHub Actions and Helm
+
+This project uses GitHub Actions for CI/CD and Helm for Kubernetes deployments.
+
+### CI/CD Pipeline Overview
+
+The CI/CD pipeline consists of the following steps:
+
+1. **Testing**: Runs pytest on the code to ensure functionality
+2. **Build**: Builds Docker images for each microservice
+3. **Push**: Pushes Docker images to Docker Hub
+4. **Deploy**: Automatically deploys to Kubernetes using Helm
+
+### Prerequisites
+
+- Kubernetes cluster access
+- Docker Hub account
+- GitHub repository with the code
+
+### Setting Up GitHub Secrets
+
+The following secrets need to be set up in your GitHub repository:
+
+- `DOCKER_HUB_USERNAME`: Your Docker Hub username
+- `DOCKER_HUB_TOKEN`: Your Docker Hub access token
+- `KUBE_CONFIG`: Base64-encoded Kubernetes config file
+- `JWT_SECRET_KEY`: JWT secret key for authentication
+- `USER_DB_PASSWORD`: Password for user service database
+- `ROOM_DB_PASSWORD`: Password for room service database
+- `RESERVATION_DB_PASSWORD`: Password for reservation service database
+
+To add these secrets:
+1. Go to your GitHub repository
+2. Navigate to Settings > Secrets and variables > Actions
+3. Click "New repository secret"
+4. Add each secret with its corresponding value
+
+### GitHub Actions Workflows
+
+Three GitHub Actions workflows are configured:
+
+1. **User Service CI/CD** (`user-service.yml`)
+2. **Room Service CI/CD** (`room-service.yml`)
+3. **Reservation Service CI/CD** (`reservation-service.yml`)
+
+Each workflow is triggered on:
+- Push to the `main` branch that affects the respective service
+- Pull requests to the `main` branch that affect the respective service
+- Manual trigger via the "workflow_dispatch" event
+
+### Helm Deployment
+
+The Helm chart structure is as follows:
+
+```
+helm/
+└── meeting-room-app/
+    ├── Chart.yaml
+    ├── values.yaml
+    └── templates/
+        ├── databases.yaml
+        ├── kafka.yaml
+        ├── microservices.yaml
+        ├── nginx.yaml
+        └── secrets.yaml
+```
+
+#### Deploying Manually with Helm
+
+To deploy the application manually:
+
+```bash
+# Install or upgrade the application
+helm upgrade --install meeting-room-app ./helm/meeting-room-app \
+  --namespace meeting-room \
+  --create-namespace \
+  --set userService.image.repository=your-username/meeting-room-user-service \
+  --set roomService.image.repository=your-username/meeting-room-room-service \
+  --set reservationService.image.repository=your-username/meeting-room-reservation-service \
+  --set jwtSecret="your-jwt-secret" \
+  --set dbSecrets.userDbPassword="your-user-db-password" \
+  --set dbSecrets.roomDbPassword="your-room-db-password" \
+  --set dbSecrets.reservationDbPassword="your-reservation-db-password"
+
+# Check the deployed application
+kubectl get all -n meeting-room
+```
+
+#### Customizing the Deployment
+
+Edit `helm/meeting-room-app/values.yaml` to change default configuration values.
+
+### Monitoring the CI/CD Pipeline
+
+1. Go to the "Actions" tab in your GitHub repository
+2. Select the workflow you want to monitor
+3. Click on the specific run to see its details
+4. The workflow logs show progress, errors, and success messages
+
+### Debugging Deployment Issues
+
+For deployment issues:
+
+```bash
+# Check pods status
+kubectl get pods -n meeting-room
+
+# View pod logs
+kubectl logs -n meeting-room pod-name
+
+# Describe a pod for detailed information
+kubectl describe pod -n meeting-room pod-name
+```
+
+### Rolling Back Deployments
+
+To roll back to a previous release:
+
+```bash
+# List Helm releases
+helm list -n meeting-room
+
+# Roll back to a previous revision
+helm rollback meeting-room-app revision-number -n meeting-room
+```
+
+## Architecture
+
+The application consists of three microservices:
+- User Service: Manages user authentication and profiles
+- Room Service: Manages meeting rooms
+- Reservation Service: Handles room reservations
+
+Supporting services:
+- PostgreSQL databases for each service
+- Kafka for messaging
+- Nginx for API gateway
