@@ -1,0 +1,214 @@
+# MEETING ROOM RESERVATION API - ARCHITECTURE OVERVIEW
+
+## PROJECT INTRODUCTION
+
+The Meeting Room Reservation API is a comprehensive microservices-based system designed for managing meeting room bookings within an organization. The system allows users to authenticate, browse available rooms, and create/manage reservations for these rooms.
+
+## ARCHITECTURE OVERVIEW
+
+The project follows a microservices architecture pattern, with three core services that each handle specific business domains:
+
+1. **User Service**: Manages user accounts, authentication, and authorization
+2. **Room Service**: Manages meeting room resources and their attributes
+3. **Reservation Service**: Handles the booking and management of reservations
+
+Each service is designed to be independently deployable, scalable, and maintainable, following the principles of microservices architecture.
+
+## TECHNICAL STACK
+
+The project leverages the following technologies:
+
+- **Backend**: Python with Flask framework for all microservices
+- **Database**: PostgreSQL (separate database for each service)
+- **API Documentation**: OpenAPI/Swagger
+- **Authentication**: JWT (JSON Web Tokens)
+- **Message Broker**: Apache Kafka for event-driven communication
+- **Containerization**: Docker and Docker Compose
+- **Orchestration**: Kubernetes (with Helm charts)
+- **CI/CD**: GitHub Actions
+- **Monitoring**: Grafana and Prometheus
+- **Logging**: Fluent Bit and Loki
+- **Cloud Integration**: AWS CloudWatch (optional)
+
+## SERVICE BREAKDOWN
+
+### 1. User Service (/user-service)
+
+**Purpose**: Handles user management, authentication, and authorization.
+
+**Key Components**:
+- User registration and authentication (`app/routes.py`, `app/auth.py`)
+- JWT token generation and validation (`app/jwt_utils.py`)
+- User profile management (`app/models.py`)
+- Kafka consumer for user events (`app/kafka_consumer.py`)
+
+**Database Schema**:
+- Users table with fields for authentication and profile information
+
+**APIs**:
+- POST /api/auth/register - Register new user
+- POST /api/auth/login - Authenticate user and get JWT
+- GET /api/users - List users (admin)
+- GET /api/users/{id} - Get specific user details
+- PUT /api/users/{id} - Update user details
+
+### 2. Room Service (/room-service)
+
+**Purpose**: Manages meeting room resources.
+
+**Key Components**:
+- Room CRUD operations (`app/routes.py`)
+- Room model with attributes like capacity, equipment, etc. (`app/models.py`)
+- JWT validation for secured endpoints (`app/jwt_utils.py`)
+- Integration with Prometheus for metrics (`run.py`)
+
+**Database Schema**:
+- Rooms table with fields for room attributes
+- Equipment table (potentially) for room features
+
+**APIs**:
+- GET /api/rooms - List all rooms
+- POST /api/rooms - Create new room (admin)
+- GET /api/rooms/{id} - Get room details
+- PUT /api/rooms/{id} - Update room (admin)
+- DELETE /api/rooms/{id} - Remove room (admin)
+
+### 3. Reservation Service (/reservation-service)
+
+**Purpose**: Manages room bookings and schedules.
+
+**Key Components**:
+- Reservation CRUD operations (`app/routes.py`)
+- Reservation validation logic (`app/models.py`)
+- Inter-service communication for user and room validation
+- JWT validation (`app/jwt_utils.py`)
+- Email notifications (`app/email_utils.py`)
+- Kafka producer for reservation events (`app/kafka_producer.py`)
+
+**Database Schema**:
+- Reservations table linking users, rooms, and time slots
+- Additional tables for recurring meetings or attendees
+
+**APIs**:
+- GET /api/reservations - List user reservations
+- POST /api/reservations - Create reservation
+- GET /api/reservations/{id} - Get reservation details
+- PUT /api/reservations/{id} - Update reservation
+- DELETE /api/reservations/{id} - Cancel reservation
+- GET /api/reservations/room/{room_id} - Get room's schedule
+
+## COMMUNICATION PATTERNS
+
+The services employ multiple communication patterns:
+
+1. **Synchronous REST API calls**: 
+   - For direct service-to-service communication
+   - Example: Reservation service calls User service to validate a user
+
+2. **Asynchronous Messaging via Kafka**:
+   - For event-driven communication
+   - Example: When a user is updated, User service publishes an event that other services can consume
+
+3. **API Gateway**:
+   - NGINX serves as a simple API gateway, routing requests to appropriate services
+
+## DEPLOYMENT ARCHITECTURE
+
+The project supports multiple deployment options:
+
+### Development Environment (Docker Compose)
+
+- Defined in `docker-compose.yml`
+- Includes all services, databases, Kafka, and NGINX
+- Ideal for local development and testing
+
+### Production Environment (Kubernetes)
+
+- Helm charts in `/helm/meeting-room-app/`
+- Templates for all services and infrastructure components
+- Supports horizontal scaling of services
+- Includes monitoring and logging stack
+
+Key Kubernetes resources:
+- Deployments for each microservice
+- StatefulSets for databases and Kafka
+- Services for networking
+- ConfigMaps and Secrets for configuration
+- Persistent Volumes for data storage
+
+## MONITORING AND OBSERVABILITY
+
+The project includes a comprehensive monitoring stack:
+
+1. **Metrics Collection**:
+   - Prometheus for collecting and storing metrics
+   - Service instrumentation via prometheus-flask-exporter
+
+2. **Visualization**:
+   - Grafana dashboards for metrics visualization
+   - Pre-configured dashboards for system and service metrics
+
+3. **Logging**:
+   - Fluent Bit for log collection
+   - Loki for log aggregation
+   - Logs accessible through Grafana
+
+4. **Cloud Integration**:
+   - Optional AWS CloudWatch integration
+   - CloudWatch alarms for critical metrics
+
+## CI/CD PIPELINE
+
+The project uses GitHub Actions for continuous integration and deployment:
+
+1. **Testing Workflow**:
+   - Runs tests on pull requests and pushes
+   - Includes code coverage reporting
+   - SonarQube analysis for code quality
+
+2. **Build Workflow**:
+   - Builds Docker images
+   - Pushes to container registry
+
+3. **Deployment Workflow**:
+   - Deploys to Kubernetes using Helm
+   - Configurable for different environments (staging, production)
+
+## SECURITY CONSIDERATIONS
+
+1. **Authentication**: JWT-based authentication with proper validation
+2. **Authorization**: Role-based access control
+3. **Data Protection**: Secure password handling, data encryption
+4. **API Security**: Input validation, rate limiting
+
+## EXTENSIBILITY AND SCALABILITY
+
+The architecture is designed to be:
+
+1. **Horizontally Scalable**: Each service can be scaled independently
+2. **Extensible**: New services can be added without significant changes
+3. **Resilient**: Services are designed to handle failures gracefully
+
+## FUTURE ENHANCEMENTS
+
+1. **Service Mesh**: Introduction of a service mesh like Istio
+2. **API Gateway**: Replace NGINX with a more feature-rich API gateway
+3. **Event Sourcing**: Implement event sourcing for better data consistency
+4. **Real-time Updates**: WebSocket or SSE for real-time notifications
+
+## FOLDER STRUCTURE EXPLANATION
+
+- `/user-service`, `/room-service`, `/reservation-service`: Individual microservices
+- `/helm`: Kubernetes deployment configurations using Helm
+- `/k8s`: Raw Kubernetes manifests (alternative to Helm)
+- `docker-compose.yml`: Development environment configuration
+- `nginx.conf`: API gateway configuration
+- `backup.sh`: Database backup utility
+
+Each microservice follows a similar structure:
+- `app/`: Core application code
+- `migrations/`: Database migrations
+- `tests/`: Test cases
+- `Dockerfile`: Container build instructions
+- `requirements.txt`: Python dependencies
+- `run.py`: Application entry point

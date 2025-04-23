@@ -1,0 +1,133 @@
+# MEETING ROOM RESERVATION API - ESSENTIAL COMMANDS
+
+## DEVELOPMENT COMMANDS
+
+# Clone the repository
+git clone https://github.com/YasserZr/MEETING-ROOM-RESERVATION-API.git
+cd MEETING-ROOM-RESERVATION-API
+
+# Docker Commands
+# Start all services using Docker Compose
+docker-compose up -d
+
+# Rebuild and start specific service
+docker-compose up -d --build user-service
+
+# View logs for services
+docker-compose logs -f user-service
+docker-compose logs -f room-service
+docker-compose logs -f reservation-service
+
+# Stop all services
+docker-compose down
+
+## DATABASE MIGRATIONS
+
+# Create new migration (example for user-service)
+cd user-service
+flask db migrate -m "your migration message"
+flask db upgrade
+
+# Similar commands for room-service and reservation-service
+cd ../room-service
+flask db migrate -m "your migration message"
+flask db upgrade
+
+cd ../reservation-service
+flask db migrate -m "your migration message"
+flask db upgrade
+
+## KUBERNETES COMMANDS
+
+# Deploy using Helm
+helm upgrade --install meeting-room-app ./helm/meeting-room-app --namespace meeting-room --create-namespace
+
+# Check deployment status
+kubectl get pods -n meeting-room
+kubectl get svc -n meeting-room
+
+# View logs of specific pod (replace pod-name with actual pod name)
+kubectl logs -n meeting-room pod-name
+
+# Port forward services for local access
+kubectl port-forward -n meeting-room svc/user-service 5000:5000
+kubectl port-forward -n meeting-room svc/room-service 5001:5001
+kubectl port-forward -n meeting-room svc/reservation-service 5002:5002
+
+## MONITORING COMMANDS
+
+# Deploy monitoring stack
+helm upgrade --install meeting-room-app ./helm/meeting-room-app --namespace meeting-room --create-namespace --set monitoring.enabled=true
+
+# Port forward Grafana and Prometheus
+kubectl port-forward -n monitoring svc/grafana 3000:80
+kubectl port-forward -n monitoring svc/prometheus-server 9090:80
+
+# Check status of monitoring components
+kubectl get pods -n monitoring
+
+## TESTING COMMANDS
+
+# Run tests for a service (example with user-service)
+cd user-service
+pytest
+pytest --cov=app  # To get coverage report
+
+## CI/CD & GIT COMMANDS
+
+# Push changes to GitHub
+git add .
+git commit -m "Your descriptive commit message"
+git push origin main
+
+# Create a new branch
+git checkout -b feature/your-new-feature
+
+# Pull latest changes
+git pull origin main
+
+## API TESTING
+
+# Basic curl commands for testing endpoints
+
+# Authentication (get JWT token)
+curl -X POST -H "Content-Type: application/json" -d '{"username":"admin","password":"password123"}' http://localhost:5000/api/auth/login
+
+# Get all rooms
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" http://localhost:5001/api/rooms
+
+# Create reservation
+curl -X POST -H "Content-Type: application/json" -H "Authorization: Bearer YOUR_JWT_TOKEN" -d '{"room_id":1,"start_time":"2025-04-23T10:00:00","end_time":"2025-04-23T11:00:00","title":"Team Meeting"}' http://localhost:5002/api/reservations
+
+## LOCAL KUBERNETES SETUP
+
+# Start minikube
+minikube start
+
+# Or use k3d
+k3d cluster create meeting-room
+
+# Set up local registry
+k3d registry create registry.localhost --port 5000
+
+# Create namespace
+kubectl create namespace meeting-room
+
+## BACKUP COMMANDS
+
+# Backup PostgreSQL databases
+./backup.sh
+
+## DEBUGGING
+
+# View detailed status of pods
+kubectl describe pod -n meeting-room pod-name
+
+# Check service logs in Kubernetes
+kubectl logs -n meeting-room deployment/user-service
+kubectl logs -n meeting-room deployment/room-service
+kubectl logs -n meeting-room deployment/reservation-service
+
+# View resource usage
+kubectl top pods -n meeting-room
+kubectl top nodes

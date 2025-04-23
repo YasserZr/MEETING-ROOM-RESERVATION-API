@@ -52,15 +52,15 @@ def get_users(user_id, token):  # Add 'token' parameter
     return jsonify([{'id': u.id, 'email': u.email, 'full_name': u.full_name, 'role': u.role} for u in users])
 
 # Update a user's role (Admin only)
-@user_bp.route('/<int:user_id>', methods=['PUT'])
+@user_bp.route('/<int:target_user_id>', methods=['PUT'])
 @token_required
 @role_required(['admin']) 
-def update_user_role(user_id,token):
+def update_user_role(user_id, target_user_id, token):
     """Update the role of a user by their ID."""
-    current_app.logger.debug(f"Admin attempting to update role for user ID: {user_id}")
-    user = User.query.get(user_id)
+    current_app.logger.debug(f"Admin (user_id: {user_id}) attempting to update role for user ID: {target_user_id}")
+    user = User.query.get(target_user_id)
     if not user:
-        current_app.logger.error(f"User with ID {user_id} not found.")
+        current_app.logger.error(f"User with ID {target_user_id} not found.")
         return jsonify({"message": "User not found"}), 404
 
     data = request.get_json()
@@ -69,38 +69,38 @@ def update_user_role(user_id,token):
         return jsonify({"message": "Role is required"}), 400
 
     new_role = data['role']
-    current_app.logger.debug(f"New role for user ID {user_id}: {new_role}")
+    current_app.logger.debug(f"New role for user ID {target_user_id}: {new_role}")
 
     try:
         user.role = new_role
         db.session.commit()
-        current_app.logger.info(f"User ID {user_id} role updated to {new_role}.")
+        current_app.logger.info(f"User ID {target_user_id} role updated to {new_role}.")
         return jsonify({"message": "User role updated successfully", "user": user.to_dict()}), 200
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error updating role for user ID {user_id}: {e}")
+        current_app.logger.error(f"Error updating role for user ID {target_user_id}: {e}")
         return jsonify({"message": "Failed to update user role", "error": str(e)}), 500
 
 # Delete a user (Admin only)
-@user_bp.route('/<int:user_id>', methods=['DELETE'])
+@user_bp.route('/<int:target_user_id>', methods=['DELETE'])
 @token_required
 @role_required(['admin']) 
-def delete_user(user_id, token):
+def delete_user(user_id, target_user_id, token):
     """Delete a user by their ID."""
-    current_app.logger.debug(f"Admin attempting to delete user ID: {user_id}")
-    user = User.query.get(user_id)
+    current_app.logger.debug(f"Admin (user_id: {user_id}) attempting to delete user ID: {target_user_id}")
+    user = User.query.get(target_user_id)
     if not user:
-        current_app.logger.error(f"User with ID {user_id} not found.")
+        current_app.logger.error(f"User with ID {target_user_id} not found.")
         return jsonify({"message": "User not found"}), 404
 
     try:
         db.session.delete(user)
         db.session.commit()
-        current_app.logger.info(f"User ID {user_id} deleted successfully.")
+        current_app.logger.info(f"User ID {target_user_id} deleted successfully.")
         return jsonify({"message": "User deleted successfully"}), 200
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting user ID {user_id}: {e}")
+        current_app.logger.error(f"Error deleting user ID {target_user_id}: {e}")
         return jsonify({"message": "Failed to delete user", "error": str(e)}), 500
 
 

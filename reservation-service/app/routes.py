@@ -68,15 +68,36 @@ def check_blackout_periods(room_id, start_time, end_time, token):
     """Check if the reservation conflicts with any blackout periods."""
     room_service_url = current_app.config.get("ROOM_SERVICE_URL", "http://room-service:5001")
     try:
+        # Fix the URL construction to include /rooms prefix and the correct path for blackout periods
         response = requests.get(
-            f"{room_service_url}/{room_id}/blackout",
-            headers={"Authorization": f"Bearer {token}"}
+            f"{room_service_url}/rooms/{room_id}/blackout",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-User-Role": "user"  # Add role header that room service requires
+            }
         )
+        current_app.logger.debug(f"Blackout check response status: {response.status_code}")
         response.raise_for_status()
         blackout_periods = response.json()
     except requests.exceptions.RequestException as e:
         current_app.logger.error(f"Failed to fetch blackout periods: {e}")
-        return False, "Failed to fetch blackout periods from room-service"
+        # Try alternate URL if the first one fails
+        try:
+            # Try with localhost if service name doesn't work
+            alternate_url = "http://localhost:5001" if "room-service" in room_service_url else "http://room-service:5001"
+            current_app.logger.debug(f"Trying alternate URL: {alternate_url}")
+            response = requests.get(
+                f"{alternate_url}/rooms/{room_id}/blackout",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-User-Role": "user"
+                }
+            )
+            response.raise_for_status()
+            blackout_periods = response.json()
+        except requests.exceptions.RequestException as e2:
+            current_app.logger.error(f"Failed with alternate URL too: {str(e2)}")
+            return False, "Failed to fetch blackout periods from room-service"
 
     for bp in blackout_periods:
         bp_start = datetime.fromisoformat(bp['start_time'])
@@ -317,20 +338,24 @@ def get_reservations(user_id, token):
 
     if start_time and end_time:
         try:
-            start_time = datetime.fromisoformat(start_time)
-            end_time = datetime.fromisoformat(end_time)
+            start_datetime = datetime.fromisoformat(start_time)
+            end_datetime = datetime.fromisoformat(end_time)
             query = query.filter(
                 or_(
-                    and_(Reservation.start_time >= start_time, Reservation.start_time < end_time),
-                    and_(Reservation.end_time > start_time, Reservation.end_time <= end_time),
-                    and_(Reservation.start_time <= start_time, Reservation.end_time >= end_time)
+                    and_(Reservation.start_time >= start_datetime, Reservation.start_time < end_datetime),
+                    and_(Reservation.end_time > start_datetime, Reservation.end_time <= end_datetime),
+                    and_(Reservation.start_time <= start_datetime, Reservation.end_time >= end_datetime)
                 )
             )
         except ValueError:
             return jsonify({"message": "Invalid date format. Use ISO 8601 format."}), 400
 
-    reservations = query.order_by(Reservation.start_time).all()
-    return jsonify([res.to_dict() for res in reservations])
+    try:
+        reservations = query.order_by(Reservation.start_time).all()
+        return jsonify([res.to_dict() for res in reservations])
+    except Exception as e:
+        current_app.logger.error(f"Error retrieving reservations: {str(e)}")
+        return jsonify({"message": "Failed to retrieve reservations", "error": str(e)}), 500
 
 # Get a specific reservation by ID
 @reservation_bp.route('/<int:reservation_id>', methods=['GET'])

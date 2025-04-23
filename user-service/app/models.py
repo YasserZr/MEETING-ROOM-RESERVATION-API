@@ -15,3 +15,14 @@ class User(db.Model):  # Ensure User inherits from db.Model
 
     def __repr__(self):
         return f'<User {self.username}>'
+        
+    def to_dict(self):
+        """Convert User object to a dictionary for JSON serialization."""
+        return {
+            'id': self.id,
+            'email': self.email,
+            'username': self.username,
+            'full_name': self.full_name,
+            'role': self.role,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }

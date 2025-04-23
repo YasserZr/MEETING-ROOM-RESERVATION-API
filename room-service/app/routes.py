@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app
-from .models import db, Room
+from .models import db, Room, BlackoutPeriod
 from .jwt_utils import token_required  # Fix typo: token_requird -> token_required
 from .decorators import token_required, role_required  # Import both token_required and role_required
 import requests
@@ -118,19 +118,50 @@ def check_room_availability(user_id, token):
     if end_time <= start_time:
         return jsonify({"message": "end_time must be after start_time"}), 400
 
+    # Get user role from request header
+    user_role = request.headers.get('X-User-Role', 'user')
+    
     # Fetch reservations from reservation-service
-    reservation_service_url = current_app.config.get("RESERVATION_SERVICE_URL", "http://reservation-service:5002")
+    # Try localhost:5002 as fallback when running outside Docker
+    reservation_service_url = current_app.config.get(
+        "RESERVATION_SERVICE_URL", 
+        "http://reservation-service:5002"
+    )
+    
+    current_app.logger.debug(f"Connecting to reservation service at: {reservation_service_url}")
+    
     try:
         response = requests.get(
             f"{reservation_service_url}/reservations",
             params={"start_time": start_time.isoformat(), "end_time": end_time.isoformat()},
-            headers={"Authorization": f"Bearer {token}"}
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-User-Role": user_role  # Pass the role header to reservation service
+            }
         )
+        current_app.logger.debug(f"Reservation service response status: {response.status_code}")
         response.raise_for_status()
         reservations = response.json()
+        current_app.logger.debug(f"Retrieved {len(reservations)} reservations")
     except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"Failed to fetch reservations: {e}")
-        return jsonify({"message": "Failed to fetch reservations from reservation-service"}), 500
+        current_app.logger.error(f"Failed to fetch reservations: {str(e)}")
+        # Try alternate URL if the first one fails (localhost fallback)
+        try:
+            alternate_url = "http://localhost:5002" if "reservation-service" in reservation_service_url else "http://reservation-service:5002"
+            current_app.logger.debug(f"Trying alternate URL: {alternate_url}")
+            response = requests.get(
+                f"{alternate_url}/reservations",
+                params={"start_time": start_time.isoformat(), "end_time": end_time.isoformat()},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-User-Role": user_role
+                }
+            )
+            response.raise_for_status()
+            reservations = response.json()
+        except requests.exceptions.RequestException as e2:
+            current_app.logger.error(f"Failed with alternate URL too: {str(e2)}")
+            return jsonify({"message": "Failed to fetch reservations from reservation-service", "error": str(e)}), 500
 
     # Get all rooms
     rooms = Room.query.all()
